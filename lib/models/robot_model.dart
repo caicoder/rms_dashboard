@@ -268,10 +268,10 @@ class RobotModel {
     this.status = 1,
     this.eStop = false,
     this.wifi88Status = 0,
-    this.taskList = const [0,0,0,0,0],
+    List<int>? taskList,
     this.soc = 0,
     this.socStaus = 0,
-    this.trajectory = const [],
+    List<TrajectoryPoint>? trajectory,
     this.patrolInfo = '',
     this.hasFallAlarm = false,
     List<PatrolSession>? patrolHistory,
@@ -279,6 +279,8 @@ class RobotModel {
     List<HealthMeasurement>? healthHistory,
   }) : 
     this.lastUpdated = lastUpdated ?? DateTime.now(),
+    this.taskList = taskList ?? [0,0,0,0,0],
+    this.trajectory = trajectory ?? [],
     this.patrolHistory = patrolHistory ?? [],
     this.alarmHistory = alarmHistory ?? [],
     this.healthHistory = healthHistory ?? [];

@@ -86,7 +86,7 @@ class RobotCard extends StatelessWidget {
             child: Opacity(
               opacity: isOffline ? 0.5 : 1.0,
               child: Padding(
-                padding: const EdgeInsets.all(24.0),
+                padding: const EdgeInsets.all(12.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -108,7 +108,9 @@ class RobotCard extends StatelessWidget {
                           children: [
                             Text(
                               robot.organization.isNotEmpty ? robot.organization : '未分配机构',
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white54),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white54,),
                             ),
                             const SizedBox(height: 2),
                             Text(

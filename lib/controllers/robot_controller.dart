@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:async';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/robot_model.dart';
@@ -7,6 +8,8 @@ import 'mqtt_controller.dart';
 
 class RobotController extends GetxController {
   var robots = <RobotModel>[].obs;
+  final Map<String, RobotModel> _robotsMap = {};
+  
   var currentPage = 0.obs;
   final int itemsPerPage = 16;
   Timer? _offlineCheckTimer;
@@ -25,7 +28,8 @@ class RobotController extends GetxController {
   void onInit() {
     super.onInit();
     _loadRobots();
-    _offlineCheckTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    // 每 5 分钟定时刷新一次 UI，检查离线状态
+    _offlineCheckTimer = Timer.periodic(const Duration(minutes: 5), (_) {
       robots.refresh();
     });
   }
@@ -41,6 +45,9 @@ class RobotController extends GetxController {
     final List<String>? robotsJsonList = prefs.getStringList('cached_robots');
     if (robotsJsonList != null) {
       robots.value = robotsJsonList.map((jsonStr) => RobotModel.fromJson(jsonDecode(jsonStr))).toList();
+      for (var r in robots) {
+        _robotsMap[r.id] = r;
+      }
     }
   }
 
@@ -51,21 +58,23 @@ class RobotController extends GetxController {
   }
 
   void addRobotBySn(String sn, String organization) {
-    if (sn.isEmpty) return;
-    if (robots.any((r) => r.id == sn)) {
+    if (_robotsMap.containsKey(sn)) {
       Get.snackbar('提示', '设备 $sn 已经存在', snackPosition: SnackPosition.BOTTOM);
       return;
     }
-    
-    robots.add(RobotModel(
+
+    var newRobot = RobotModel(
       id: sn,
       name: '设备 $sn',
       organization: organization,
-      lastUpdated: DateTime.now().subtract(const Duration(minutes: 2)),
-    ));
+      lastUpdated: DateTime.now().subtract(const Duration(minutes: 2)), // 默认刚添加时在线2分钟前
+    );
+    robots.add(newRobot);
+    _robotsMap[sn] = newRobot;
     
-    saveRobots(); // Persist
-
+    saveRobots();
+    Get.snackbar('成功', '设备 $sn 已添加', snackPosition: SnackPosition.BOTTOM);
+    
     try {
       Get.find<MqttController>().subscribeToRobot(sn);
     } catch (e) {
@@ -73,23 +82,25 @@ class RobotController extends GetxController {
     }
   }
 
-  void removeRobot(String sn) {
-    robots.removeWhere((r) => r.id == sn);
-    saveRobots(); // Persist
+  void removeRobot(String id) {
+    robots.removeWhere((r) => r.id == id);
+    _robotsMap.remove(id);
+    saveRobots();
     
     try {
-      Get.find<MqttController>().unsubscribeFromRobot(sn);
-      Get.snackbar('已删除', '设备 $sn 已被移除并取消订阅', snackPosition: SnackPosition.BOTTOM);
+      Get.find<MqttController>().unsubscribeFromRobot(id);
+      Get.snackbar('已删除', '设备 $id 已被移除并取消订阅', snackPosition: SnackPosition.BOTTOM);
     } catch (e) {
       print(e);
     }
   }
 
-  void updateHeartbeat(String id, Map<String, dynamic> data) {
-    var index = robots.indexWhere((r) => r.id == id);
-    if (index < 0) return; // Only process if added manually
+  DateTime _lastRefreshTime = DateTime.now();
 
-    var robot = robots[index];
+  void updateHeartbeat(String id, Map<String, dynamic> data) {
+    var robot = _robotsMap[id];
+    if (robot == null) return; // Only process if added manually
+
     robot.type = int.tryParse(data['type']?.toString() ?? '0') ?? 0;
     robot.status = int.tryParse(data['status']?.toString() ?? '1') ?? 1;
     robot.eStop = data['eStop'] ?? false;
@@ -145,14 +156,17 @@ class RobotController extends GetxController {
     }
 
     robot.lastUpdated = DateTime.now();
-    robots[index] = robot;
-    // We don't save heartbeats immediately to avoid heavy IO, only on events
+    
+    // Throttle UI refresh to avoid lag on fast heartbeats
+    if (DateTime.now().difference(_lastRefreshTime).inMilliseconds > 500) {
+      robots.refresh();
+      _lastRefreshTime = DateTime.now();
+    }
   }
 
   void updatePatrolEvent(String id, Map<String, dynamic> params, int subtype) {
-    var index = robots.indexWhere((r) => r.id == id);
-    if (index >= 0) {
-      var robot = robots[index];
+    var robot = _robotsMap[id];
+    if (robot != null) {
       String recordId = params['patrolRecordId']?.toString() ?? '';
       
       if (subtype == 1) { // 巡逻开始 (Patrol start)
@@ -195,15 +209,14 @@ class RobotController extends GetxController {
       }
 
       robot.lastUpdated = DateTime.now();
-      robots[index] = robot;
-      saveRobots(); // Persist
+      robots.refresh();
+      saveRobots(); 
     }
   }
 
   void updatePatrolStatus(String id, Map<String, dynamic> params, int subtype) {
-    var index = robots.indexWhere((r) => r.id == id);
-    if (index >= 0) {
-      var robot = robots[index];
+    var robot = _robotsMap[id];
+    if (robot != null) {
       
       if (subtype == 3) {
         String recordId = params['patrolRecordId']?.toString() ?? '';
@@ -250,17 +263,15 @@ class RobotController extends GetxController {
       }
       
       robot.lastUpdated = DateTime.now();
-      robots[index] = robot;
-      saveRobots(); // Persist
+      robots.refresh();
+      saveRobots();
     }
   }
 
   void updateAlarmEvent(String id, Map<String, dynamic> body, int subtype) {
-    var index = robots.indexWhere((r) => r.id == id);
-    if (index >= 0) {
-      var robot = robots[index];
-      
-      String title = '未知告警';
+    var robot = _robotsMap[id];
+    if (robot != null) {
+      String title = "未知告警";
       if (subtype == 12) {
         title = '跌倒告警';
         robot.hasFallAlarm = true;
@@ -289,15 +300,14 @@ class RobotController extends GetxController {
       );
 
       robot.lastUpdated = DateTime.now();
-      robots[index] = robot;
-      saveRobots(); // Persist
+      robots.refresh();
+      saveRobots();
     }
   }
 
   void updateHealthEvent(String id, Map<String, dynamic> body) {
-    var index = robots.indexWhere((r) => r.id == id);
-    if (index >= 0) {
-      var robot = robots[index];
+    var robot = _robotsMap[id];
+    if (robot != null) {
       
       int subtype = int.tryParse(body['subtype']?.toString() ?? '0') ?? 0;
       String userId = body['userId']?.toString() ?? '0';
@@ -314,8 +324,8 @@ class RobotController extends GetxController {
       if (robot.healthHistory.length > 50) robot.healthHistory.removeAt(0);
 
       robot.lastUpdated = DateTime.now();
-      robots[index] = robot;
-      saveRobots(); // Persist
+      robots.refresh();
+      saveRobots();
     }
   }
 

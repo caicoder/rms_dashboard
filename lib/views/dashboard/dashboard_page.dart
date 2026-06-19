@@ -184,7 +184,10 @@ class DashboardPage extends StatelessWidget {
                       itemBuilder: (context, index) {
                         return Hero(
                           tag: 'robot_${robots[index].id}',
-                          child: RobotCard(robot: robots[index]),
+                          child: RobotCard(
+                            key: ValueKey(robots[index].id),
+                            robot: robots[index],
+                          ),
                         );
                       },
                     ),
@@ -223,7 +226,8 @@ class DashboardPage extends StatelessWidget {
                   ),
                   const SizedBox(width: 16),
                   const Text(
-                    '骅羲智能机器人监控系统',
+                    '骅羲监控系统',
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
