@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'dart:ui';
+import 'dart:convert';
 import '../../controllers/robot_controller.dart';
 import '../../controllers/mqtt_controller.dart';
 import 'widgets/robot_card.dart';
@@ -67,14 +68,84 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
+  void _showBatchAddDialog(BuildContext context) {
+    final TextEditingController jsonController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('批量添加设备 (Batch Add)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: 500,
+          height: 300,
+          child: TextField(
+            controller: jsonController,
+            maxLines: 15,
+            style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
+            decoration: InputDecoration(
+              hintText: '请输入 JSON 数组，例如：\n[\n  {"name": "深圳市XX机构", "SN": "ZJX110..."}\n]',
+              hintStyle: const TextStyle(color: Colors.white30),
+              filled: true,
+              fillColor: Colors.black26,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消 (Cancel)', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+            onPressed: () {
+              try {
+                var list = jsonDecode(jsonController.text.trim());
+                if (list is List) {
+                  int successCount = 0;
+                  int skipCount = 0;
+                  for (var item in list) {
+                    if (item is Map && item['SN'] != null) {
+                      String sn = item['SN'].toString().trim();
+                      String name = item['name']?.toString().trim() ?? '';
+                      if (sn.isNotEmpty) {
+                        if (!robotController.robots.any((r) => r.id == sn)) {
+                          robotController.addRobotBySn(sn, name);
+                          successCount++;
+                        } else {
+                          skipCount++;
+                        }
+                      }
+                    }
+                  }
+                  Navigator.pop(context);
+                  Get.snackbar('批量添加完成', '成功导入 $successCount 个设备，跳过已存在 $skipCount 个', snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green, colorText: Colors.white);
+                } else {
+                  Get.snackbar('格式错误', 'JSON 必须是一个数组 []', snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.redAccent, colorText: Colors.white);
+                }
+              } catch (e) {
+                Get.snackbar('解析失败', '请输入合法的 JSON 格式', snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.redAccent, colorText: Colors.white);
+              }
+            },
+            child: const Text('导入 (Import)', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddRobotDialog(context),
-        icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white),
-        label: const Text('添加设备', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF3B82F6),
+      floatingActionButton: GestureDetector(
+        onLongPress: () => _showBatchAddDialog(context),
+        child: FloatingActionButton.extended(
+          onPressed: () => _showAddRobotDialog(context),
+          icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white),
+          label: const Text('添加设备', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          backgroundColor: const Color(0xFF3B82F6),
+        ),
       ),
       body: Container(
         decoration: const BoxDecoration(
