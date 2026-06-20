@@ -162,7 +162,7 @@ class DashboardPage extends StatelessWidget {
         child: SafeArea(
           child: Column(
             children: [
-              _buildHeader(),
+              _buildHeader(context),
               Expanded(
                 child: Obx(() {
                   final robots = robotController.robots; // View all robots for pagination
@@ -201,12 +201,14 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
+    bool isSmallScreen = MediaQuery.of(context).size.width < 600;
+    
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+          padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 16.0 : 24.0, vertical: isSmallScreen ? 12.0 : 20.0),
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B).withOpacity(0.5),
             border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
@@ -214,65 +216,103 @@ class DashboardPage extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF3B82F6).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3B82F6).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.dashboard_rounded, color: const Color(0xFF3B82F6), size: isSmallScreen ? 24 : 28),
                     ),
-                    child: const Icon(Icons.dashboard_rounded, color: Color(0xFF3B82F6), size: 28),
-                  ),
-                  const SizedBox(width: 16),
-                  const Text(
-                    '骅羲监控系统',
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-              Obx(() {
-                final isConnected = mqttController.connectionState.value == MqttConnectionState.connected;
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: (isConnected ? Colors.green : Colors.red).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: (isConnected ? Colors.green : Colors.red).withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isConnected ? Colors.greenAccent : Colors.redAccent,
-                          boxShadow: [
-                            BoxShadow(
-                              color: (isConnected ? Colors.greenAccent : Colors.redAccent).withOpacity(0.5),
-                              blurRadius: 6,
-                              spreadRadius: 2,
-                            )
-                          ],
+                    SizedBox(width: isSmallScreen ? 8 : 16),
+                    Expanded(
+                      child: Text(
+                        '骅羲监控系统',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 18 : 24,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                          color: Colors.white,
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Text(
-                        isConnected ? 'MQTT 连接正常' : 'MQTT 已断开',
-                        style: TextStyle(
-                          color: isConnected ? Colors.greenAccent : Colors.redAccent,
-                          fontWeight: FontWeight.w600,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Obx(() {
+                final isConnected = mqttController.connectionState.value == MqttConnectionState.connected;
+                final isRetrying = mqttController.isRetrying.value;
+                final retryCount = mqttController.retryCount.value;
+
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 10 : 16, vertical: isSmallScreen ? 6 : 8),
+                      decoration: BoxDecoration(
+                        color: (isConnected ? Colors.green : Colors.red).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: (isConnected ? Colors.green : Colors.red).withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isConnected ? Colors.greenAccent : Colors.redAccent,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: (isConnected ? Colors.greenAccent : Colors.redAccent).withOpacity(0.5),
+                                  blurRadius: 6,
+                                  spreadRadius: 2,
+                                )
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            isSmallScreen 
+                                ? (isConnected ? '正常' : (isRetrying ? '重连($retryCount)' : '断开')) 
+                                : (isConnected ? 'MQTT 连接正常' : (isRetrying ? 'MQTT 重连中($retryCount/5)' : 'MQTT 已断开')),
+                            style: TextStyle(
+                              color: isConnected ? Colors.greenAccent : Colors.redAccent,
+                              fontWeight: FontWeight.w600,
+                              fontSize: isSmallScreen ? 12 : 14,
+                            ),
+                          )
+                        ],
+                      ),
+                    ),
+                    if (!isConnected) ...[
+                      const SizedBox(width: 8),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: isRetrying ? null : () => mqttController.manualReconnect(),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: isRetrying ? Colors.grey.withOpacity(0.2) : Colors.blueAccent.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isRetrying ? Icons.hourglass_empty : Icons.refresh_rounded, 
+                              color: isRetrying ? Colors.grey : Colors.blueAccent, 
+                              size: 18
+                            ),
+                          ),
                         ),
                       )
-                    ],
-                  ),
+                    ]
+                  ],
                 );
               })
             ],
@@ -294,9 +334,13 @@ class DashboardPage extends StatelessWidget {
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Colors.white70),
           ),
           const SizedBox(height: 8),
-          const Text(
-            '点击右下角的"添加设备"按钮输入 SN 码，开始监听机器人状态。',
-            style: TextStyle(color: Colors.white54, fontSize: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: const Text(
+              '点击右下角的"添加设备"按钮输入 SN 码，开始监听机器人状态。',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white54, fontSize: 16),
+            ),
           ),
         ],
       ),

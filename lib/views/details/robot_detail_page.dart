@@ -269,13 +269,15 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
 
   Widget _buildSideButton(String label, IconData icon, Color color, String panelId) {
     bool isActive = _isPanelOpen && _activePanel == panelId;
+    bool isSmallScreen = MediaQuery.of(context).size.width < 600;
+    
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () => _togglePanel(panelId),
         borderRadius: BorderRadius.circular(30),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 12 : 16, vertical: 12),
           decoration: BoxDecoration(
             color: isActive ? color.withOpacity(0.2) : const Color(0xFF1E293B).withOpacity(0.9),
             borderRadius: BorderRadius.circular(30),
@@ -288,8 +290,10 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
-              Text(label, style: TextStyle(color: isActive ? Colors.white : Colors.white70, fontWeight: FontWeight.w600)),
+              if (!isSmallScreen) ...[
+                const SizedBox(width: 8),
+                Text(label, style: TextStyle(color: isActive ? Colors.white : Colors.white70, fontWeight: FontWeight.w600)),
+              ],
             ],
           ),
         ),

@@ -28,8 +28,9 @@ class RobotController extends GetxController {
   void onInit() {
     super.onInit();
     _loadRobots();
-    // 每 5 分钟定时刷新一次 UI，检查离线状态
+    // 每 5 分钟定时刷新一次 UI，检查离线状态并排序
     _offlineCheckTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      _sortRobots();
       robots.refresh();
     });
   }
@@ -339,5 +340,31 @@ class RobotController extends GetxController {
     if (currentPage.value > 0) {
       currentPage.value--;
     }
+  }
+
+  void _sortRobots() {
+    robots.sort((a, b) {
+      // 1. 急停排在最前面 (eStop == true)
+      if (a.eStop && !b.eStop) return -1;
+      if (!a.eStop && b.eStop) return 1;
+
+      // 4. 离线状态排最后 (isOffline == true)
+      bool aOffline = a.isOffline;
+      bool bOffline = b.isOffline;
+      
+      if (!aOffline && bOffline) return -1;
+      if (aOffline && !bOffline) return 1;
+
+      // 都在线的情况，判断空闲/非空闲状态
+      // 2. 当前不是空闲状态排第二 (type != 0)
+      // 3. 空闲状态排第三 (type == 0)
+      bool aIdle = a.type == 0;
+      bool bIdle = b.type == 0;
+      
+      if (!aIdle && bIdle) return -1; // a 非空闲，b 空闲 -> a 排前面
+      if (aIdle && !bIdle) return 1;  // a 空闲，b 非空闲 -> b 排前面
+
+      return 0; // 其他情况保持原有顺序
+    });
   }
 }

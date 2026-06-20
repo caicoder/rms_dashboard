@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:get/get.dart';
 import 'package:mqtt_client/mqtt_client.dart';
@@ -12,6 +13,9 @@ class MqttController extends GetxController {
   
   MqttClient? client;
   var connectionState = MqttConnectionState.disconnected.obs;
+  var isRetrying = false.obs;
+  var retryCount = 0.obs;
+  Timer? _reconnectTimer;
 
   final RobotController robotController = Get.find<RobotController>();
 
@@ -54,8 +58,12 @@ class MqttController extends GetxController {
       client!.disconnect();
     }
 
-    if (client!.connectionStatus!.state == MqttConnectionState.connected) {
+    if (client!.connectionStatus?.state == MqttConnectionState.connected) {
       connectionState.value = MqttConnectionState.connected;
+      isRetrying.value = false;
+      retryCount.value = 0;
+      _reconnectTimer?.cancel();
+
       // 使用通配符 '+' 一次性订阅该项目下所有的机器人心跳与事件主题
       client!.subscribe('HuaXi/01/01/huaxi001/D/P/+', MqttQos.atLeastOnce);
       client!.subscribe('HuaXi/01/01/huaxi001/D/U/+', MqttQos.atLeastOnce);
@@ -69,7 +77,32 @@ class MqttController extends GetxController {
       });
     } else {
       connectionState.value = MqttConnectionState.disconnected;
+      _scheduleReconnect();
     }
+  }
+
+  void _scheduleReconnect() {
+    if (connectionState.value == MqttConnectionState.connected) return;
+    if (_reconnectTimer != null && _reconnectTimer!.isActive) return;
+
+    if (retryCount.value < 5) {
+      isRetrying.value = true;
+      retryCount.value++;
+      print('Scheduling reconnect attempt ${retryCount.value} in 1 minute...');
+      _reconnectTimer = Timer(const Duration(minutes: 1), () {
+        _connect();
+      });
+    } else {
+      isRetrying.value = false;
+      print('Max reconnect attempts reached. Waiting for manual trigger.');
+    }
+  }
+
+  void manualReconnect() {
+    _reconnectTimer?.cancel();
+    retryCount.value = 0;
+    isRetrying.value = true;
+    _connect();
   }
 
   void _handleMessage(String topic, String payload) {
@@ -124,6 +157,7 @@ class MqttController extends GetxController {
   void onDisconnected() {
     print('MQTT client disconnected');
     connectionState.value = MqttConnectionState.disconnected;
+    _scheduleReconnect();
   }
 
   void onConnected() {
