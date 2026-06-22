@@ -84,6 +84,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
+    bool isSmallScreen = MediaQuery.of(context).size.width < 600;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -107,16 +109,16 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
             top: -100,
             left: -100,
             child: Container(
-              width: 400,
-              height: 400,
+              width: isSmallScreen ? 250 : 400,
+              height: isSmallScreen ? 250 : 400,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0xFF3B82F6).withOpacity(0.15),
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xFF3B82F6).withOpacity(0.2),
-                    blurRadius: 100,
-                    spreadRadius: 50,
+                    blurRadius: isSmallScreen ? 60 : 100,
+                    spreadRadius: isSmallScreen ? 30 : 50,
                   ),
                 ],
               ),
@@ -128,16 +130,16 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
             bottom: -150,
             right: -100,
             child: Container(
-              width: 500,
-              height: 500,
+              width: isSmallScreen ? 300 : 500,
+              height: isSmallScreen ? 300 : 500,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0xFF10B981).withOpacity(0.1),
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xFF10B981).withOpacity(0.15),
-                    blurRadius: 120,
-                    spreadRadius: 60,
+                    blurRadius: isSmallScreen ? 80 : 120,
+                    spreadRadius: isSmallScreen ? 40 : 60,
                   ),
                 ],
               ),
@@ -151,18 +153,18 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
               child: SlideTransition(
                 position: _slideAnimation,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 16.0 : 24.0),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(isSmallScreen ? 24 : 30),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 20.0, sigmaY: 20.0),
                       child: Container(
                         width: double.infinity,
                         constraints: const BoxConstraints(maxWidth: 450),
-                        padding: const EdgeInsets.all(40),
+                        padding: EdgeInsets.all(isSmallScreen ? 24 : 40),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(30),
+                          borderRadius: BorderRadius.circular(isSmallScreen ? 24 : 30),
                           border: Border.all(
                             color: Colors.white.withOpacity(0.1),
                             width: 1.5,
@@ -180,7 +182,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           children: [
                             // Logo Placeholder / Icon
                             Container(
-                              padding: const EdgeInsets.all(20),
+                              padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF3B82F6).withOpacity(0.1),
                                 shape: BoxShape.circle,
@@ -189,38 +191,38 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                   width: 2,
                                 ),
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.rocket_launch_rounded,
-                                size: 50,
-                                color: Color(0xFF3B82F6),
+                                size: isSmallScreen ? 40 : 50,
+                                color: const Color(0xFF3B82F6),
                               ),
                             ),
-                            const SizedBox(height: 30),
+                            SizedBox(height: isSmallScreen ? 20 : 30),
                             
                             // Title
                             Text(
                               "骅羲智能监控系统",
                               style: GoogleFonts.inter(
-                                fontSize: 32,
+                                fontSize: isSmallScreen ? 24 : 32,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                                 letterSpacing: 1.2,
                               ),
                               textAlign: TextAlign.center,
                             ),
-                            const SizedBox(height: 12),
+                            SizedBox(height: isSmallScreen ? 8 : 12),
                             
                             // Subtitle
                             Text(
                               "企业内部员工专属通道",
                               style: GoogleFonts.inter(
-                                fontSize: 16,
+                                fontSize: isSmallScreen ? 14 : 16,
                                 color: Colors.white70,
                                 letterSpacing: 0.5,
                               ),
                               textAlign: TextAlign.center,
                             ),
-                            const SizedBox(height: 48),
+                            SizedBox(height: isSmallScreen ? 32 : 48),
 
                             // DingTalk Login Button
                             InkWell(
@@ -228,7 +230,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 14 : 16),
                                 decoration: BoxDecoration(
                                   gradient: const LinearGradient(
                                     colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
@@ -248,16 +250,16 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     // DingTalk icon mock (can use image asset if available)
-                                    const Icon(
+                                    Icon(
                                       Icons.chat_bubble_rounded, // fallback icon
                                       color: Colors.white,
-                                      size: 24,
+                                      size: isSmallScreen ? 20 : 24,
                                     ),
                                     const SizedBox(width: 12),
                                     Text(
                                       "钉钉一键授权登录",
                                       style: GoogleFonts.inter(
-                                        fontSize: 18,
+                                        fontSize: isSmallScreen ? 16 : 18,
                                         fontWeight: FontWeight.w600,
                                         color: Colors.white,
                                       ),
@@ -266,7 +268,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 24),
+                            SizedBox(height: isSmallScreen ? 20 : 24),
                             
                             // Security Note
                             Row(
@@ -274,14 +276,14 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                               children: [
                                 Icon(
                                   Icons.security,
-                                  size: 16,
+                                  size: isSmallScreen ? 14 : 16,
                                   color: Colors.white.withOpacity(0.4),
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
                                   "数据传输已全程加密",
                                   style: GoogleFonts.inter(
-                                    fontSize: 12,
+                                    fontSize: isSmallScreen ? 11 : 12,
                                     color: Colors.white.withOpacity(0.4),
                                   ),
                                 ),

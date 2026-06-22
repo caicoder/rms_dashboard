@@ -41,32 +41,64 @@ class RobotController extends GetxController {
     super.onClose();
   }
 
+  bool _isLoaded = false;
+
   Future<void> _loadRobots() async {
-    final prefs = await SharedPreferences.getInstance();
-    final List<String>? robotsJsonList = prefs.getStringList('cached_robots');
-    if (robotsJsonList != null) {
-      robots.value = robotsJsonList.map((jsonStr) => RobotModel.fromJson(jsonDecode(jsonStr))).toList();
-      for (var r in robots) {
-        _robotsMap[r.id] = r;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final List<String>? robotsJsonList = prefs.getStringList('cached_robots');
+      if (robotsJsonList != null) {
+        List<RobotModel> loadedRobots = [];
+        for (var jsonStr in robotsJsonList) {
+          try {
+            var decoded = jsonDecode(jsonStr);
+            loadedRobots.add(RobotModel.fromJson(decoded));
+          } catch (e) {
+            print('Error parsing a robot from cache: $e');
+          }
+        }
+        robots.value = loadedRobots;
+        for (var r in robots) {
+          _robotsMap[r.id] = r;
+        }
       }
+      final List<String>? deletedIds = prefs.getStringList('deleted_robots');
+      if (deletedIds != null) {
+        _deletedRobots.addAll(deletedIds);
+      }
+    } catch (e) {
+      print('Exception in _loadRobots: $e');
+    } finally {
+      _isLoaded = true;
     }
   }
 
   Future<void> saveRobots() async {
+    if (!_isLoaded) return; // Prevent saving if not fully loaded yet
     final prefs = await SharedPreferences.getInstance();
     final List<String> robotsJsonList = robots.map((r) => jsonEncode(r.toJson())).toList();
     await prefs.setStringList('cached_robots', robotsJsonList);
+    await prefs.setStringList('deleted_robots', _deletedRobots.toList());
   }
 
-  void addRobotBySn(String sn, String organization) {
+  void addRobotBySn(String sn, String organization, {bool showSnackbar = true}) {
+    _deletedRobots.remove(sn);
     if (_robotsMap.containsKey(sn)) {
-      Get.snackbar('提示', '设备 $sn 已经存在', snackPosition: SnackPosition.BOTTOM);
+      var existing = _robotsMap[sn]!;
+      if (organization.isNotEmpty && (existing.name == '设备 $sn' || existing.name == '自动发现')) {
+         existing.name = organization;
+         existing.organization = organization;
+         saveRobots();
+         robots.refresh();
+      } else if (showSnackbar) {
+        Get.snackbar('提示', '设备 $sn 已经存在', snackPosition: SnackPosition.BOTTOM);
+      }
       return;
     }
 
     var newRobot = RobotModel(
       id: sn,
-      name: '设备 $sn',
+      name: organization.isNotEmpty ? organization : '设备 $sn',
       organization: organization,
       lastUpdated: DateTime.now().subtract(const Duration(minutes: 2)), // 默认刚添加时在线2分钟前
     );
@@ -74,7 +106,10 @@ class RobotController extends GetxController {
     _robotsMap[sn] = newRobot;
     
     saveRobots();
-    Get.snackbar('成功', '设备 $sn 已添加', snackPosition: SnackPosition.BOTTOM);
+    if (showSnackbar) {
+      Get.snackbar('成功', '设备 $sn 已添加', snackPosition: SnackPosition.BOTTOM);
+    }
+
     
     try {
       Get.find<MqttController>().subscribeToRobot(sn);
@@ -84,6 +119,7 @@ class RobotController extends GetxController {
   }
 
   void removeRobot(String id) {
+    _deletedRobots.add(id);
     robots.removeWhere((r) => r.id == id);
     _robotsMap.remove(id);
     saveRobots();
@@ -96,11 +132,31 @@ class RobotController extends GetxController {
     }
   }
 
+  Future<void> clearAllRobots() async {
+    robots.clear();
+    _robotsMap.clear();
+    _deletedRobots.clear();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('cached_robots');
+    await prefs.remove('deleted_robots');
+    Get.snackbar('清理完成', '所有本地设备缓存已清除', snackPosition: SnackPosition.BOTTOM);
+  }
+
   DateTime _lastRefreshTime = DateTime.now();
+  final Set<String> _deletedRobots = {};
+
+  RobotModel? _getOrAddRobot(String id) {
+    if (!_isLoaded) return null;
+    if (_deletedRobots.contains(id)) return null;
+
+    // 禁用自动发现：只有手动添加或批量导入的设备才会显示
+    // 如果想要恢复自动发现，可以在这里 new RobotModel 并 add 到 robots 中
+    return _robotsMap[id];
+  }
 
   void updateHeartbeat(String id, Map<String, dynamic> data) {
-    var robot = _robotsMap[id];
-    if (robot == null) return; // Only process if added manually
+    var robot = _getOrAddRobot(id);
+    if (robot == null) return;
 
     robot.type = int.tryParse(data['type']?.toString() ?? '0') ?? 0;
     robot.status = int.tryParse(data['status']?.toString() ?? '1') ?? 1;
@@ -166,7 +222,7 @@ class RobotController extends GetxController {
   }
 
   void updatePatrolEvent(String id, Map<String, dynamic> params, int subtype) {
-    var robot = _robotsMap[id];
+    var robot = _getOrAddRobot(id);
     if (robot != null) {
       String recordId = params['patrolRecordId']?.toString() ?? '';
       
@@ -216,7 +272,7 @@ class RobotController extends GetxController {
   }
 
   void updatePatrolStatus(String id, Map<String, dynamic> params, int subtype) {
-    var robot = _robotsMap[id];
+    var robot = _getOrAddRobot(id);
     if (robot != null) {
       
       if (subtype == 3) {
@@ -270,7 +326,7 @@ class RobotController extends GetxController {
   }
 
   void updateAlarmEvent(String id, Map<String, dynamic> body, int subtype) {
-    var robot = _robotsMap[id];
+    var robot = _getOrAddRobot(id);
     if (robot != null) {
       String title = "未知告警";
       if (subtype == 12) {
@@ -307,7 +363,7 @@ class RobotController extends GetxController {
   }
 
   void updateHealthEvent(String id, Map<String, dynamic> body) {
-    var robot = _robotsMap[id];
+    var robot = _getOrAddRobot(id);
     if (robot != null) {
       
       int subtype = int.tryParse(body['subtype']?.toString() ?? '0') ?? 0;

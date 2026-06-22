@@ -25,7 +25,7 @@ class MqttController extends GetxController with WidgetsBindingObserver {
   // Health check: if no message received in 3x keepAlive period, reconnect
   static const Duration _messageTimeOut = Duration(minutes: 3);
 
-  final RobotController robotController = Get.find<RobotController>();
+  RobotController get robotController => Get.find<RobotController>();
 
   @override
   void onInit() {

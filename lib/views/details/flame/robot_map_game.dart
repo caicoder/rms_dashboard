@@ -120,12 +120,13 @@ class TrajectoryLayerComponent extends PositionComponent with TapCallbacks {
   }
 }
 
-class RobotMapGame extends FlameGame with PanDetector, ScrollDetector {
+class RobotMapGame extends FlameGame with ScaleDetector, ScrollDetector {
   final MapData mapData;
   final RobotModel robot;
   final void Function(TrajectoryPoint)? onPointClicked;
   
   double _currentScale = 1.0;
+  double _scaleStartZoom = 1.0;
   Vector2? _lastFocalPoint;
 
   RobotMapGame(this.mapData, this.robot, {this.onPointClicked});
@@ -187,26 +188,40 @@ class RobotMapGame extends FlameGame with PanDetector, ScrollDetector {
     camera.viewfinder.position = Vector2(mapData.config.width / 2, mapData.config.height / 2);
   }
 
+  // ========================
+  // Scale: handles both single-finger pan AND two-finger pinch-to-zoom
+  // ========================
   @override
-  void onPanStart(DragStartInfo info) {
-    _lastFocalPoint = info.eventPosition.global;
+  void onScaleStart(ScaleStartInfo info) {
+    _scaleStartZoom = _currentScale;
+    final fp = info.raw.focalPoint;
+    _lastFocalPoint = Vector2(fp.dx, fp.dy);
   }
 
   @override
-  void onPanUpdate(DragUpdateInfo info) {
-    if (_lastFocalPoint == null) return;
-    final delta = info.eventPosition.global - _lastFocalPoint!;
-    
-    final a = camera.viewfinder.angle;
-    final worldDx = delta.x * math.cos(a) + delta.y * math.sin(a);
-    final worldDy = -delta.x * math.sin(a) + delta.y * math.cos(a);
-    
-    camera.viewfinder.position -= Vector2(worldDx, worldDy) / _currentScale;
-    _lastFocalPoint = info.eventPosition.global;
+  void onScaleUpdate(ScaleUpdateInfo info) {
+    // Two-finger pinch: apply zoom
+    if (info.raw.pointerCount >= 2) {
+      final newScale = (_scaleStartZoom * info.raw.scale).clamp(0.05, 20.0);
+      _currentScale = newScale;
+      camera.viewfinder.zoom = _currentScale;
+    }
+
+    // Pan: works for both single-finger and two-finger (focal point movement)
+    final fp = info.raw.focalPoint;
+    final currentFocal = Vector2(fp.dx, fp.dy);
+    if (_lastFocalPoint != null) {
+      final delta = currentFocal - _lastFocalPoint!;
+      final a = camera.viewfinder.angle;
+      final worldDx = delta.x * math.cos(a) + delta.y * math.sin(a);
+      final worldDy = -delta.x * math.sin(a) + delta.y * math.cos(a);
+      camera.viewfinder.position -= Vector2(worldDx, worldDy) / _currentScale;
+    }
+    _lastFocalPoint = currentFocal;
   }
 
   @override
-  void onPanEnd(DragEndInfo info) {
+  void onScaleEnd(ScaleEndInfo info) {
     _lastFocalPoint = null;
   }
 

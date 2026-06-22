@@ -10,8 +10,8 @@ import 'widgets/robot_card.dart';
 class DashboardPage extends StatelessWidget {
   DashboardPage({Key? key}) : super(key: key);
 
-  final RobotController robotController = Get.put(RobotController());
-  final MqttController mqttController = Get.put(MqttController());
+  final RobotController robotController = Get.put(RobotController(), permanent: true);
+  final MqttController mqttController = Get.put(MqttController(), permanent: true);
 
   void _showAddRobotDialog(BuildContext context) {
     final TextEditingController snController = TextEditingController();
@@ -110,8 +110,9 @@ class DashboardPage extends StatelessWidget {
                       String sn = item['SN'].toString().trim();
                       String name = item['name']?.toString().trim() ?? '';
                       if (sn.isNotEmpty) {
-                        if (!robotController.robots.any((r) => r.id == sn)) {
-                          robotController.addRobotBySn(sn, name);
+                        int previousCount = robotController.robots.length;
+                        robotController.addRobotBySn(sn, name, showSnackbar: false);
+                        if (robotController.robots.length > previousCount || robotController.robots.firstWhere((r) => r.id == sn).name == name) {
                           successCount++;
                         } else {
                           skipCount++;
@@ -138,14 +139,52 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: GestureDetector(
-        onLongPress: () => _showBatchAddDialog(context),
-        child: FloatingActionButton.extended(
-          onPressed: () => _showAddRobotDialog(context),
-          icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white),
-          label: const Text('添加设备', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          backgroundColor: const Color(0xFF3B82F6),
-        ),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // FloatingActionButton.extended(
+          //   heroTag: 'clear_all',
+          //   onPressed: () {
+          //     showDialog(
+          //       context: context,
+          //       builder: (context) => AlertDialog(
+          //         backgroundColor: const Color(0xFF1E293B),
+          //         title: const Text('清空缓存', style: TextStyle(color: Colors.redAccent)),
+          //         content: const Text('确定要清空所有设备缓存吗？这会彻底清除本地存储的所有 SN 和机构名称记录！', style: TextStyle(color: Colors.white70)),
+          //         actions: [
+          //           TextButton(
+          //             onPressed: () => Navigator.pop(context),
+          //             child: const Text('取消', style: TextStyle(color: Colors.white70)),
+          //           ),
+          //           ElevatedButton(
+          //             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+          //             onPressed: () {
+          //               robotController.clearAllRobots();
+          //               Navigator.pop(context);
+          //             },
+          //             child: const Text('确认清空', style: TextStyle(color: Colors.white)),
+          //           ),
+          //         ],
+          //       ),
+          //     );
+          //   },
+          //   icon: const Icon(Icons.delete_sweep_rounded, color: Colors.white),
+          //   label: const Text('清空缓存', style: TextStyle(color: Colors.white)),
+          //   backgroundColor: Colors.redAccent.withOpacity(0.8),
+          // ),
+          // const SizedBox(height: 16),
+          GestureDetector(
+            onLongPress: () => _showBatchAddDialog(context),
+            child: FloatingActionButton.extended(
+              heroTag: 'add_device',
+              onPressed: () => _showAddRobotDialog(context),
+              icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white),
+              label: const Text('添加设备', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              backgroundColor: const Color(0xFF3B82F6),
+            ),
+          ),
+        ],
       ),
       body: Container(
         decoration: const BoxDecoration(

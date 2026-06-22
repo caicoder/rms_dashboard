@@ -35,7 +35,7 @@ class RobotCard extends StatelessWidget {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
                 onPressed: () {
-                  Get.back(); // 必须先关弹窗，否则后续的 snackbar 会拦截这个 back 事件
+                  Navigator.of(context, rootNavigator: true).pop();
                   Get.find<RobotController>().removeRobot(robot.id);
                 },
                 child: const Text('删除', style: TextStyle(color: Colors.white)),
