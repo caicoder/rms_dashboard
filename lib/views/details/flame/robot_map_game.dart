@@ -215,7 +215,7 @@ class RobotMapGame extends FlameGame with ScaleDetector, ScrollDetector {
       final a = camera.viewfinder.angle;
       final worldDx = delta.x * math.cos(a) + delta.y * math.sin(a);
       final worldDy = -delta.x * math.sin(a) + delta.y * math.cos(a);
-      camera.viewfinder.position -= Vector2(worldDx, worldDy) / _currentScale;
+      camera.viewfinder.position += Vector2(worldDx, worldDy) / _currentScale;
     }
     _lastFocalPoint = currentFocal;
   }

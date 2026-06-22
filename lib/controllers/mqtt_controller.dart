@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:mqtt_client/mqtt_client.dart';
@@ -247,6 +248,26 @@ class MqttController extends GetxController with WidgetsBindingObserver {
       }
     } catch (e) {
       print('Error parsing message: $e');
+    }
+  }
+
+  /// 向指定 SN 的机器人下发指令
+  /// topic: HuaXi/01/01/huaxi001/P/D/{sn}
+  Future<bool> publishCommand(String sn, Map<String, dynamic> payload) async {
+    if (client?.connectionStatus?.state != MqttConnectionState.connected) {
+      Get.snackbar('连接异常', '请检查 MQTT 连接状态', snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.redAccent, colorText: Colors.white);
+      return false;
+    }
+    final topic = 'HuaXi/01/01/huaxi001/P/D/$sn';
+    final jsonStr = jsonEncode(payload);
+    final builder = MqttClientPayloadBuilder();
+    builder.addString(jsonStr);
+    try {
+      client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
+      return true;
+    } catch (e) {
+      print('publishCommand error: $e');
+      return false;
     }
   }
 

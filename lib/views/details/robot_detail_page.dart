@@ -1,10 +1,13 @@
+import 'dart:convert';
 import 'package:flame/game.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../models/robot_model.dart';
 import '../../models/map_data.dart';
 import '../../controllers/robot_controller.dart';
+import '../../controllers/mqtt_controller.dart';
 import 'flame/robot_map_game.dart';
 
 class RobotDetailPage extends StatefulWidget {
@@ -18,13 +21,19 @@ class RobotDetailPage extends StatefulWidget {
 
 class _RobotDetailPageState extends State<RobotDetailPage> {
   final RobotController robotController = Get.find<RobotController>();
+  final MqttController mqttController = Get.find<MqttController>();
   RobotMapGame? _game;
   bool _isLoadingMap = true;
   bool _mapLoadFailed = false;
 
   // 侧边栏状态
-  String? _activePanel; // 'alarm', 'patrol', 'health', 'trajectory'
+  String? _activePanel; // 'alarm', 'patrol', 'health', 'trajectory', 'command'
   bool _isPanelOpen = false;
+
+  // 指令面板状态
+  bool _isSendingCommand = false;
+  final List<Map<String, dynamic>> _commandLog = [];
+  final TextEditingController _customMsgController = TextEditingController();
 
   @override
   void initState() {
@@ -79,6 +88,7 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   void dispose() {
     // 显式释放 C++ 层的图片图形内存，防止不断进出详情页导致 OOM
     _game?.mapData.image.dispose();
+    _customMsgController.dispose();
     super.dispose();
   }
 
@@ -145,19 +155,22 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
                   _buildSideButton('健康检测上报', Icons.monitor_heart_rounded, Colors.greenAccent, 'health'),
                   const SizedBox(height: 16),
                   _buildSideButton('最近轨迹', Icons.insights_rounded, Colors.purpleAccent, 'trajectory'),
+                  const SizedBox(height: 16),
+                  _buildSideButton('指令控制', Icons.terminal_rounded, Colors.amberAccent, 'command'),
                 ],
               ),
             ),
 
-            // 5. 底部地图控制按钮
-            Positioned(
-              bottom: 32,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: _buildMapControls(),
+            // 5. 底部地图控制按钮（仅大屏/Web显示，手机端用双指手势）
+            if (kIsWeb || MediaQuery.of(context).size.width >= 600)
+              Positioned(
+                bottom: 32,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: _buildMapControls(),
+                ),
               ),
-            ),
           ],
         );
       }),
@@ -311,9 +324,489 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
         return _buildHealthPanel(robot);
       case 'trajectory':
         return _buildTrajectoryPanel(robot);
+      case 'command':
+        return _buildCommandPanel(robot);
       default:
         return const SizedBox();
     }
+  }
+
+  // ============================
+  // 指令控制面板
+  // ============================
+  Widget _buildCommandPanel(RobotModel robot) {
+    return Column(
+      children: [
+        _buildPanelHeader('指令控制', Icons.terminal_rounded, Colors.amberAccent),
+        if (_isSendingCommand)
+          Container(
+            padding: const EdgeInsets.all(12),
+            color: Colors.amberAccent.withOpacity(0.05),
+            child: Row(
+              children: [
+                const SizedBox(width: 8, height: 8, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amberAccent)),
+                const SizedBox(width: 12),
+                const Text('正在发送指令...', style: TextStyle(color: Colors.amberAccent, fontSize: 13)),
+              ],
+            ),
+          ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _buildCommandSection('🚀 巡逻指令', [
+                _CommandItem(
+                  icon: Icons.play_arrow_rounded,
+                  title: '开始巡逻',
+                  subtitle: '触发机器人开始默认巡逻任务',
+                  color: Colors.greenAccent,
+                  onTap: () => _sendCommand(robot.id, '开始巡逻', {
+                    'cmdId': 8,
+                    'version': 2,
+                    'timeTag': DateTime.now().millisecondsSinceEpoch,
+                    'body': {'type': 3, 'subtype': 1, 'params': {'patrolId': '1'}},
+                  }),
+                ),
+                _CommandItem(
+                  icon: Icons.stop_rounded,
+                  title: '停止巡逻',
+                  subtitle: '立即停止当前巡逻任务',
+                  color: Colors.redAccent,
+                  onTap: () => _sendCommand(robot.id, '停止巡逻', {
+                    'cmdId': 8,
+                    'version': 2,
+                    'timeTag': DateTime.now().millisecondsSinceEpoch,
+                    'body': {'type': 3, 'subtype': 2},
+                  }),
+                ),
+                _CommandItem(
+                  icon: Icons.battery_charging_full_rounded,
+                  title: '回去充电',
+                  subtitle: '立即召回机器人返回充电桩',
+                  color: Colors.amberAccent,
+                  onTap: () => _sendCommand(robot.id, '回去充电', {
+                    'cmdId': 8,
+                    'version': 2,
+                    'timeTag': DateTime.now().millisecondsSinceEpoch,
+                    'body': {'type': '5', 'subtype': 1, 'params': {}},
+                  }),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              _buildCommandSection('🔧 系统维护', [
+                _CommandItem(
+                  icon: Icons.wifi_protected_setup_rounded,
+                  title: '同步 WiFi 给 88',
+                  subtitle: '通过 SSH 同步 WiFi 配置',
+                  color: Colors.cyanAccent,
+                  onTap: () => _sendCommand(robot.id, '同步WiFi', {
+                    'cmdId': 9,
+                    'version': 2,
+                    'timeTag': DateTime.now().millisecondsSinceEpoch,
+                    'body': {'type': '1'},
+                  }),
+                ),
+                _CommandItem(
+                  icon: Icons.restart_alt_rounded,
+                  title: '重启 Todesk',
+                  subtitle: '通过 SSH 重启远控服务',
+                  color: Colors.indigoAccent,
+                  onTap: () => _sendCommand(robot.id, '重启Todesk', {
+                    'cmdId': 9,
+                    'version': 2,
+                    'timeTag': DateTime.now().millisecondsSinceEpoch,
+                    'body': {'type': '2'},
+                  }),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              _buildCommandSection('📋 日志与诊断', [
+                _CommandItem(
+                  icon: Icons.calendar_today_rounded,
+                  title: '拉取指定日期安卓日志',
+                  subtitle: '选择日期拉取指定日期的日志',
+                  color: Colors.orangeAccent,
+                  onTap: () => _showDateLogDialog(robot.id),
+                ),
+                _CommandItem(
+                  icon: Icons.description_rounded,
+                  title: '拉取当天日志',
+                  subtitle: '拉取当天的日志内容',
+                  color: Colors.blueAccent,
+                  onTap: () => _showTodayLogDialog(
+                    robot.id,
+                    title: '拉取当天日志',
+                    hint: '请描述清楚问题',
+                    subtype: 1,
+                  ),
+                ),
+                _CommandItem(
+                  icon: Icons.radar_rounded,
+                  title: '拉取机器人图片',
+                  subtitle: '获取机器人 ROS 雷达图',
+                  color: Colors.tealAccent,
+                  onTap: () => _showTodayLogDialog(
+                    robot.id,
+                    title: '获取机器人的图片',
+                    hint: '请描述清楚问题',
+                    subtype: 3,
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              _buildCommandSection('📝 自定义指令', [
+                _CommandItem(
+                  icon: Icons.code_rounded,
+                  title: '自定义 JSON 指令',
+                  subtitle: '手动编辑并发送原始指令',
+                  color: Colors.purpleAccent,
+                  onTap: () => _showCustomCommandDialog(robot.id),
+                ),
+              ]),
+              if (_commandLog.isNotEmpty) ...
+              [
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    const Icon(Icons.history_rounded, color: Colors.white54, size: 16),
+                    const SizedBox(width: 6),
+                    const Text('发送记录', style: TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () => setState(() => _commandLog.clear()),
+                      child: const Text('清空', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ..._commandLog.reversed.take(10).map((log) => _buildLogEntry(log)).toList(),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCommandSection(String title, List<_CommandItem> items) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(title, style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.03),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withOpacity(0.08)),
+          ),
+          child: Column(
+            children: List.generate(items.length, (i) {
+              final item = items[i];
+              return Column(
+                children: [
+                  _buildCommandTile(item),
+                  if (i < items.length - 1)
+                    Divider(height: 1, color: Colors.white.withOpacity(0.06), indent: 60),
+                ],
+              );
+            }),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCommandTile(_CommandItem item) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _isSendingCommand ? null : item.onTap,
+        borderRadius: BorderRadius.circular(16),
+        splashColor: item.color.withOpacity(0.1),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: item.color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: item.color.withOpacity(0.3)),
+                ),
+                child: Icon(item.icon, color: item.color, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(item.subtitle, style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 12)),
+                  ],
+                ),
+              ),
+              Icon(Icons.send_rounded, color: item.color.withOpacity(0.6), size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogEntry(Map<String, dynamic> log) {
+    final bool success = log['success'] == true;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: (success ? Colors.greenAccent : Colors.redAccent).withOpacity(0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: (success ? Colors.greenAccent : Colors.redAccent).withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(success ? Icons.check_circle_rounded : Icons.error_rounded,
+              color: success ? Colors.greenAccent : Colors.redAccent, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(log['name'] ?? '', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          ),
+          Text(log['time'] ?? '', style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _sendCommand(String sn, String name, Map<String, dynamic> payload) async {
+    setState(() => _isSendingCommand = true);
+    final success = await mqttController.publishCommand(sn, payload);
+    setState(() {
+      _isSendingCommand = false;
+      _commandLog.add({
+        'name': name,
+        'success': success,
+        'time': DateFormat('HH:mm:ss').format(DateTime.now()),
+      });
+    });
+    Get.snackbar(
+      success ? '✅ 指令已发送' : '❌ 发送失败',
+      success ? '"$name" 指令已成功下发至 $sn' : '请检查 MQTT 连接状态',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: success ? const Color(0xFF065F46) : const Color(0xFF7F1D1D),
+      colorText: Colors.white,
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  void _showDateLogDialog(String sn) {
+    DateTime selectedDate = DateTime.now();
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.orangeAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.calendar_today_rounded, color: Colors.orangeAccent, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text('拉取指定日期安卓日志', style: TextStyle(color: Colors.white, fontSize: 15)),
+            ],
+          ),
+          content: GestureDetector(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: selectedDate,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now(),
+                builder: (context, child) => Theme(
+                  data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: Colors.orangeAccent)),
+                  child: child!,
+                ),
+              );
+              if (picked != null) setDialogState(() => selectedDate = picked);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.orangeAccent.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orangeAccent.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_month_rounded, color: Colors.orangeAccent, size: 20),
+                  const SizedBox(width: 12),
+                  Text(
+                    '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}',
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const Spacer(),
+                  const Text('点击更改', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消', style: TextStyle(color: Colors.white54))),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, foregroundColor: Colors.black87, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              icon: const Icon(Icons.send_rounded, size: 16),
+              label: const Text('发送'),
+              onPressed: () async {
+                final dateStr = '${selectedDate.year}${selectedDate.month.toString().padLeft(2, '0')}${selectedDate.day.toString().padLeft(2, '0')}';
+                Navigator.pop(context);
+                await _sendCommand(sn, '拉取${selectedDate.month}月${selectedDate.day}日日志', {
+                  'cmdId': 8,
+                  'version': 2,
+                  'timeTag': DateTime.now().millisecondsSinceEpoch,
+                  'body': {'type': 7, 'subtype': 2, 'params': {'time': dateStr}},
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showTodayLogDialog(String sn, {required String title, required String hint, required int subtype}) {
+    final textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: (subtype == 3 ? Colors.tealAccent : Colors.blueAccent).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(subtype == 3 ? Icons.radar_rounded : Icons.description_rounded,
+                  color: subtype == 3 ? Colors.tealAccent : Colors.blueAccent, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 15))),
+          ],
+        ),
+        content: TextField(
+          controller: textController,
+          maxLines: 3,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(color: Colors.white30),
+            filled: true,
+            fillColor: Colors.black26,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withOpacity(0.1))),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: subtype == 3 ? Colors.tealAccent : Colors.blueAccent)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: subtype == 3 ? Colors.tealAccent : Colors.blueAccent,
+              foregroundColor: Colors.black87,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: const Icon(Icons.send_rounded, size: 16),
+            label: const Text('发送'),
+            onPressed: () async {
+              final message = textController.text.trim();
+              if (message.isEmpty) {
+                Get.snackbar('提示', '请输入描述内容', snackPosition: SnackPosition.BOTTOM);
+                return;
+              }
+              Navigator.pop(context);
+              await _sendCommand(sn, title, {
+                'cmdId': 8,
+                'version': 2,
+                'timeTag': DateTime.now().millisecondsSinceEpoch,
+                'body': {'type': 7, 'subtype': subtype, 'params': {'message': message}},
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCustomCommandDialog(String sn) {
+    _customMsgController.text = '{\n  "cmdId": 8,\n  "version": 2,\n  "timeTag": ${DateTime.now().millisecondsSinceEpoch},\n  "body": {}\n}';
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: Colors.purpleAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.code_rounded, color: Colors.purpleAccent, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Text('自定义 JSON 指令', style: TextStyle(color: Colors.white, fontSize: 16)),
+          ],
+        ),
+        content: SizedBox(
+          width: 400,
+          child: TextField(
+            controller: _customMsgController,
+            maxLines: 12,
+            style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13, height: 1.6),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.black26,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.purpleAccent.withOpacity(0.3))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withOpacity(0.1))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.purpleAccent)),
+              hintText: '请输入合法的 JSON 指令',
+              hintStyle: const TextStyle(color: Colors.white30),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purpleAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            icon: const Icon(Icons.send_rounded, size: 16),
+            label: const Text('发送'),
+            onPressed: () async {
+              try {
+                final decoded = jsonDecode(_customMsgController.text.trim()) as Map<String, dynamic>;
+                Navigator.pop(context);
+                await _sendCommand(sn, '自定义指令', decoded);
+              } catch (e) {
+                Get.snackbar('格式错误', '请输入合法的 JSON', backgroundColor: Colors.redAccent, colorText: Colors.white, snackPosition: SnackPosition.BOTTOM);
+              }
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildAlarmPanel(RobotModel robot) {
@@ -766,4 +1259,20 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
       ),
     );
   }
+}
+
+class _CommandItem {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _CommandItem({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
 }
