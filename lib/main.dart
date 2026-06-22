@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'controllers/auth_controller.dart';
 import 'views/dashboard/dashboard_page.dart';
+import 'views/login/login_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   WakelockPlus.enable();
+  Get.put(AuthController()); // Initialize AuthController
   runApp(const RMSApp());
 }
 
@@ -30,7 +33,20 @@ class RMSApp extends StatelessWidget {
           error: Color(0xFFEF4444),
         ),
       ),
-      home: DashboardPage(),
+      home: Obx(() {
+        final authController = Get.find<AuthController>();
+        if (authController.isLoading.value) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6))),
+          );
+        }
+        
+        if (authController.isLoggedIn.value) {
+          return DashboardPage();
+        } else {
+          return const LoginPage();
+        }
+      }),
     );
   }
 }

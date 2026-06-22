@@ -20,6 +20,13 @@ dependencies:
   http: ^1.2.0
   yaml: ^3.1.2
   wakelock_plus: ^1.1.4
+  webview_flutter: ^4.10.0
+  dio: ^5.4.3
+  flutter_web_plugins:
+    sdk: flutter
+  universal_platform: ^1.0.0
+  universal_html: ^2.2.4
+  flutter_secure_storage: ^9.0.0
 
 dev_dependencies:
   flutter_test:
