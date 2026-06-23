@@ -338,3 +338,31 @@ class RobotModel {
     healthHistory: (json['healthHistory'] as List<dynamic>?)?.map((e) => HealthMeasurement.fromJson(e)).toList() ?? [],
   );
 }
+
+class ActiveAlarmItem {
+  final String robotId;
+  final String organization;
+  final String alarmTitle;
+  final DateTime time;
+
+  ActiveAlarmItem({
+    required this.robotId,
+    required this.organization,
+    required this.alarmTitle,
+    required this.time,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'robotId': robotId,
+    'organization': organization,
+    'alarmTitle': alarmTitle,
+    'time': time.toIso8601String(),
+  };
+
+  factory ActiveAlarmItem.fromJson(Map<String, dynamic> json) => ActiveAlarmItem(
+    robotId: json['robotId'] ?? '',
+    organization: json['organization'] ?? '',
+    alarmTitle: json['alarmTitle'] ?? '',
+    time: json['time'] != null ? DateTime.parse(json['time']) : DateTime.now(),
+  );
+}

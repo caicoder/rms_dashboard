@@ -3,8 +3,10 @@ import 'package:get/get.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'dart:ui';
 import 'dart:convert';
+import 'package:intl/intl.dart';
 import '../../controllers/robot_controller.dart';
 import '../../controllers/mqtt_controller.dart';
+import '../../models/robot_model.dart';
 import '../widgets/tv_focus_helper.dart';
 import 'widgets/robot_card.dart';
 
@@ -216,35 +218,53 @@ class DashboardPage extends StatelessWidget {
             children: [
               _buildHeader(context),
               Expanded(
-                child: Obx(() {
-                  final robots = robotController.robots; // View all robots for pagination
-                  if (robots.isEmpty) {
-                    return _buildEmptyState();
-                  }
-                  
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                    child: GridView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 450, // 自动拉伸，最大宽度450
-                        crossAxisSpacing: 24,
-                        mainAxisSpacing: 24,
-                        childAspectRatio: 1.1, // 调整卡片的长宽比以自适应内容
-                      ),
-                      itemCount: robots.length,
-                      itemBuilder: (context, index) {
-                        return Hero(
-                          tag: 'robot_${robots[index].id}',
-                          child: RobotCard(
-                            key: ValueKey(robots[index].id),
-                            robot: robots[index],
+                child: Stack(
+                  children: [
+                    Obx(() {
+                      final robots = robotController.robots; // View all robots for pagination
+                      if (robots.isEmpty) {
+                        return _buildEmptyState();
+                      }
+                      
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                        child: GridView.builder(
+                          physics: const BouncingScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 450, // 自动拉伸，最大宽度450
+                            crossAxisSpacing: 24,
+                            mainAxisSpacing: 24,
+                            childAspectRatio: 1.1, // 调整卡片的长宽比以自适应内容
                           ),
-                        );
-                      },
-                    ),
-                  );
-                }),
+                          itemCount: robots.length,
+                          itemBuilder: (context, index) {
+                            return Hero(
+                              tag: 'robot_${robots[index].id}',
+                              child: RobotCard(
+                                key: ValueKey(robots[index].id),
+                                robot: robots[index],
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    }),
+                    
+                    // Floating Alarms Panel on the Right
+                    Obx(() {
+                      final alarms = robotController.activeAlarms;
+                      if (alarms.isEmpty) return const SizedBox.shrink();
+                      
+                      return Positioned(
+                        top: 16,
+                        bottom: 16,
+                        right: 24,
+                        width: 320,
+                        child: _buildFloatingAlarmList(context, alarms),
+                      );
+                    }),
+                  ],
+                ),
               ),
             ],
           ),
@@ -426,5 +446,150 @@ class DashboardPage extends StatelessWidget {
         ),
       );
     });
+  }
+
+  Widget _buildFloatingAlarmList(BuildContext context, List<ActiveAlarmItem> alarms) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B).withOpacity(0.85),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.redAccent.withOpacity(0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.redAccent.withOpacity(0.1),
+            blurRadius: 20,
+            spreadRadius: 2,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.1),
+                  border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.ring_volume_rounded, color: Colors.redAccent, size: 20),
+                    const SizedBox(width: 10),
+                    const Text(
+                      '实时告警监控',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${alarms.length}',
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Alarms List
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: alarms.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    // Reverse to show newest at the top
+                    final alarm = alarms[alarms.length - 1 - index];
+                    final timeStr = DateFormat('HH:mm:ss').format(alarm.time);
+                    
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.03),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withOpacity(0.05)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  alarm.organization,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'SN: ${alarm.robotId}',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
+                                  ),
+                                  child: Text(
+                                    alarm.alarmTitle,
+                                    style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.access_time_rounded, color: Colors.white30, size: 12),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      timeStr,
+                                      style: const TextStyle(color: Colors.white30, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Close button to remove
+                          TvFocusHelper(
+                            onTap: () {
+                              robotController.removeActiveAlarm(alarm);
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            focusColor: Colors.redAccent,
+                            child: const Padding(
+                              padding: EdgeInsets.all(4.0),
+                              child: Icon(Icons.close, color: Colors.white54, size: 16),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -9,6 +9,7 @@ import 'mqtt_controller.dart';
 class RobotController extends GetxController {
   var robots = <RobotModel>[].obs;
   final Map<String, RobotModel> _robotsMap = {};
+  var activeAlarms = <ActiveAlarmItem>[].obs;
   
   var currentPage = 0.obs;
   final int itemsPerPage = 16;
@@ -66,6 +67,10 @@ class RobotController extends GetxController {
       if (deletedIds != null) {
         _deletedRobots.addAll(deletedIds);
       }
+      final List<String>? alarmsJsonList = prefs.getStringList('active_alarms');
+      if (alarmsJsonList != null) {
+        activeAlarms.value = alarmsJsonList.map((e) => ActiveAlarmItem.fromJson(jsonDecode(e))).toList();
+      }
     } catch (e) {
       print('Exception in _loadRobots: $e');
     } finally {
@@ -79,6 +84,8 @@ class RobotController extends GetxController {
     final List<String> robotsJsonList = robots.map((r) => jsonEncode(r.toJson())).toList();
     await prefs.setStringList('cached_robots', robotsJsonList);
     await prefs.setStringList('deleted_robots', _deletedRobots.toList());
+    final List<String> alarmsJsonList = activeAlarms.map((e) => jsonEncode(e.toJson())).toList();
+    await prefs.setStringList('active_alarms', alarmsJsonList);
   }
 
   void addRobotBySn(String sn, String organization, {bool showSnackbar = true}) {
@@ -339,6 +346,14 @@ class RobotController extends GetxController {
       ));
       if (robot.alarmHistory.length > 50) robot.alarmHistory.removeAt(0);
 
+      // Add to active alarms
+      activeAlarms.add(ActiveAlarmItem(
+        robotId: id,
+        organization: robot.organization.isNotEmpty ? robot.organization : '设备 $id',
+        alarmTitle: title,
+        time: DateTime.now(),
+      ));
+
       Get.snackbar('🚨 $title', '设备 $id 发生 $title！', 
         snackPosition: SnackPosition.TOP, 
         backgroundColor: Get.theme.colorScheme.error,
@@ -386,6 +401,20 @@ class RobotController extends GetxController {
     if (currentPage.value > 0) {
       currentPage.value--;
     }
+  }
+
+  void removeActiveAlarm(ActiveAlarmItem alarm) {
+    activeAlarms.remove(alarm);
+    final r = _robotsMap[alarm.robotId];
+    if (r != null) {
+      // Check if there are any other '跌倒告警' active alarms left for this robot
+      bool hasAnyFall = activeAlarms.any((a) => a.robotId == r.id && a.alarmTitle == '跌倒告警');
+      if (!hasAnyFall) {
+        r.hasFallAlarm = false;
+      }
+    }
+    saveRobots();
+    robots.refresh();
   }
 
   void _sortRobots() {

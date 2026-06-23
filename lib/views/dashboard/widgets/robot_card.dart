@@ -13,7 +13,7 @@ class RobotCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    bool isCritical = robot.eStop || robot.hasFallAlarm;
+    bool isCritical = robot.eStop;
     bool isOffline = robot.isOffline;
     bool isLowBattery = robot.soc < 15;
 
@@ -222,7 +222,7 @@ class RobotCard extends StatelessWidget {
       color = Colors.grey;
       icon = Icons.cloud_off_rounded;
     } else if (robot.hasFallAlarm) {
-      color = const Color(0xFFEF4444);
+      color = const Color(0xFFF97316); // 橙色/橘色以避免红色 (Orange to avoid red color)
       icon = Icons.priority_high_rounded;
     } else if (robot.eStop) {
       color = const Color(0xFFEF4444);
@@ -257,22 +257,40 @@ class RobotCard extends StatelessWidget {
     IconData batteryIcon = robot.socStaus == 0 || robot.socStaus == 2 
         ? Icons.battery_charging_full_rounded 
         : Icons.battery_full_rounded;
-    Color batteryColor = isLow ? const Color(0xFFEF4444) : const Color(0xFF10B981);
+
+    Color batteryBgColor = Colors.black.withOpacity(0.3);
+    Color contentColor = const Color(0xFF10B981);
+
+    if (robot.soc < 10) {
+      batteryBgColor = const Color(0xFFEF4444); // 红色
+      contentColor = Colors.white;
+    } else if (robot.soc < 20) {
+      batteryBgColor = const Color(0xFFEAB308); // 黄色 (High-contrast yellow)
+      contentColor = Colors.black; // Black text on yellow background for readability
+    } else if (robot.soc < 40) {
+      batteryBgColor = const Color(0xFFA855F7); // 紫色
+      contentColor = Colors.white;
+    } else if (robot.soc < 50) {
+      batteryBgColor = const Color(0xFFF97316); // 橙色
+      contentColor = Colors.white;
+    } else if (isLow) {
+      contentColor = const Color(0xFFEF4444);
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
+        color: batteryBgColor,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(batteryIcon, color: batteryColor, size: 16),
+          Icon(batteryIcon, color: contentColor, size: 16),
           const SizedBox(width: 6),
           Text(
             '${robot.soc}%',
-            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+            style: TextStyle(color: contentColor, fontSize: 13, fontWeight: FontWeight.w700),
           ),
         ],
       ),
