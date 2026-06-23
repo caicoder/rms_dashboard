@@ -225,35 +225,31 @@ class RobotController extends GetxController {
     var robot = _getOrAddRobot(id);
     if (robot != null) {
       String recordId = params['patrolRecordId']?.toString() ?? '';
+      if (recordId.isEmpty) {
+        recordId = 'session_${DateTime.now().millisecondsSinceEpoch}';
+      }
       
       if (subtype == 1) { // 巡逻开始 (Patrol start)
         var newSession = PatrolSession(recordId: recordId, startTime: DateTime.now());
         newSession.events.add(PatrolEventLog(time: DateTime.now(), title: '巡逻开始', eventType: 1));
-        robot.patrolHistory.add(newSession);
+        robot.patrolHistory[recordId] = newSession;
         // Keep only last 20
-        if (robot.patrolHistory.length > 20) robot.patrolHistory.removeAt(0);
+        if (robot.patrolHistory.length > 20) {
+          var sortedKeys = robot.patrolHistory.keys.toList()
+            ..sort((a, b) => robot.patrolHistory[a]!.startTime.compareTo(robot.patrolHistory[b]!.startTime));
+          robot.patrolHistory.remove(sortedKeys.first);
+        }
         robot.patrolInfo = '开始巡逻';
       } else if (subtype == 2 || subtype == 0) { // 巡逻节点到达
         String nodeName = params['value']?.toString() ?? '未知点位';
         int result = params['result'] ?? 1;
         String? imgUrl = params['imgUrl']?.toString();
         
-        PatrolSession? currentSession;
-        if (robot.patrolHistory.isNotEmpty) {
-          if (recordId.isNotEmpty) {
-            for (var s in robot.patrolHistory.reversed) {
-              if (s.recordId == recordId) {
-                currentSession = s;
-                break;
-              }
-            }
-          }
-          currentSession ??= robot.patrolHistory.last;
-        }
+        PatrolSession? currentSession = robot.patrolHistory[recordId];
         
         if (currentSession == null) {
            currentSession = PatrolSession(recordId: recordId, startTime: DateTime.now());
-           robot.patrolHistory.add(currentSession);
+           robot.patrolHistory[recordId] = currentSession;
         }
         String title = result == 3 ? '跳过点位: $nodeName' : '到达点位: $nodeName';
         currentSession.events.add(PatrolEventLog(
@@ -274,24 +270,18 @@ class RobotController extends GetxController {
   void updatePatrolStatus(String id, Map<String, dynamic> params, int subtype) {
     var robot = _getOrAddRobot(id);
     if (robot != null) {
-      
       if (subtype == 3) {
         String recordId = params['patrolRecordId']?.toString() ?? '';
         int status = params['status'] ?? 0;
         int result = params['result'] ?? 0;
         String reason = params['reason']?.toString() ?? '';
         
-        PatrolSession? currentSession;
-        if (robot.patrolHistory.isNotEmpty) {
-          if (recordId.isNotEmpty) {
-            for (var s in robot.patrolHistory.reversed) {
-              if (s.recordId == recordId) {
-                currentSession = s;
-                break;
-              }
-            }
-          }
-          currentSession ??= robot.patrolHistory.last;
+        PatrolSession? currentSession = robot.patrolHistory[recordId];
+        if (currentSession == null && robot.patrolHistory.isNotEmpty) {
+          // Fallback to the latest session if recordId didn't match or is empty
+          var sorted = robot.patrolHistory.values.toList()
+            ..sort((a, b) => b.startTime.compareTo(a.startTime));
+          currentSession = sorted.first;
         }
         
         if (currentSession != null) {

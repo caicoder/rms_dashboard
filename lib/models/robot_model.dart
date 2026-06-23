@@ -221,7 +221,7 @@ class RobotModel {
   bool hasFallAlarm;
 
   // Caching specific histories
-  List<PatrolSession> patrolHistory;
+  Map<String, PatrolSession> patrolHistory;
   List<AlarmEvent> alarmHistory;
   List<HealthMeasurement> healthHistory;
 
@@ -274,14 +274,14 @@ class RobotModel {
     List<TrajectoryPoint>? trajectory,
     this.patrolInfo = '',
     this.hasFallAlarm = false,
-    List<PatrolSession>? patrolHistory,
+    Map<String, PatrolSession>? patrolHistory,
     List<AlarmEvent>? alarmHistory,
     List<HealthMeasurement>? healthHistory,
   }) : 
     this.lastUpdated = lastUpdated ?? DateTime.now(),
     this.taskList = taskList ?? [0,0,0,0,0],
     this.trajectory = trajectory ?? [],
-    this.patrolHistory = patrolHistory ?? [],
+    this.patrolHistory = patrolHistory ?? {},
     this.alarmHistory = alarmHistory ?? [],
     this.healthHistory = healthHistory ?? [];
 
@@ -302,7 +302,7 @@ class RobotModel {
     'trajectory': trajectory.map((e) => e.toJson()).toList(),
     'patrolInfo': patrolInfo,
     'hasFallAlarm': hasFallAlarm,
-    'patrolHistory': patrolHistory.map((e) => e.toJson()).toList(),
+    'patrolHistory': patrolHistory.map((k, v) => MapEntry(k, v.toJson())),
     'alarmHistory': alarmHistory.map((e) => e.toJson()).toList(),
     'healthHistory': healthHistory.map((e) => e.toJson()).toList(),
   };
@@ -326,7 +326,14 @@ class RobotModel {
         .toList() ?? [],
     patrolInfo: json['patrolInfo'] ?? '',
     hasFallAlarm: json['hasFallAlarm'] ?? false,
-    patrolHistory: (json['patrolHistory'] as List<dynamic>?)?.map((e) => PatrolSession.fromJson(e)).toList() ?? [],
+    patrolHistory: json['patrolHistory'] is Map
+        ? (json['patrolHistory'] as Map<String, dynamic>).map((k, e) => MapEntry(k, PatrolSession.fromJson(e)))
+        : (json['patrolHistory'] is List
+            ? Map.fromEntries((json['patrolHistory'] as List).map((e) {
+                final s = PatrolSession.fromJson(e);
+                return MapEntry(s.recordId.isNotEmpty ? s.recordId : 'session_${s.startTime.millisecondsSinceEpoch}', s);
+              }))
+            : <String, PatrolSession>{}),
     alarmHistory: (json['alarmHistory'] as List<dynamic>?)?.map((e) => AlarmEvent.fromJson(e)).toList() ?? [],
     healthHistory: (json['healthHistory'] as List<dynamic>?)?.map((e) => HealthMeasurement.fromJson(e)).toList() ?? [],
   );

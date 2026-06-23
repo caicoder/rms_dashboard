@@ -905,18 +905,21 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   }
 
   Widget _buildPatrolPanel(RobotModel robot) {
+    final sessions = robot.patrolHistory.values.toList()
+      ..sort((a, b) => b.startTime.compareTo(a.startTime));
+
     return Column(
       children: [
         _buildPanelHeader('巡逻事件', Icons.route_rounded, Colors.blueAccent),
         Expanded(
-          child: robot.patrolHistory.isEmpty
+          child: sessions.isEmpty
             ? const Center(child: Text('暂无巡逻记录', style: TextStyle(color: Colors.white54)))
             : ListView.separated(
                 padding: const EdgeInsets.all(16),
-                itemCount: robot.patrolHistory.length,
+                itemCount: sessions.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
-                  final session = robot.patrolHistory[robot.patrolHistory.length - 1 - index];
+                  final session = sessions[index];
                   String timeStr = '';
                   if (session.events.isNotEmpty) {
                     timeStr = DateFormat('MM-dd HH:mm:ss').format(session.events.first.time);
@@ -940,9 +943,10 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
                       border: Border.all(color: Colors.blueAccent.withOpacity(0.2))
                     ),
                     child: ExpansionTile(
+                      initiallyExpanded: false,
                       iconColor: Colors.blueAccent,
                       collapsedIconColor: Colors.white54,
-                      title: Text(session.recordId.isEmpty ? '巡逻任务 (本地记录)' : '任务 ID: ${session.recordId}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                      title: Text(session.recordId.isEmpty || session.recordId.startsWith('session_') ? '巡逻任务 (本地记录)' : '任务 ID: ${session.recordId}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
                       subtitle: Text('共 ${session.events.length} 个详细事件\n$timeStr', style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.4)),
                       children: session.events.map((e) {
                         IconData icon;
