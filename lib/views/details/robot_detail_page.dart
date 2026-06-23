@@ -215,19 +215,19 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
         onKeyEvent: (node, event) {
           if (event is KeyDownEvent) {
             final key = event.logicalKey;
-            if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.dpadUp) {
+            if (key == LogicalKeyboardKey.arrowUp) {
               _game!.moveUp();
               return KeyEventResult.handled;
-            } else if (key == LogicalKeyboardKey.arrowDown || key == LogicalKeyboardKey.dpadDown) {
+            } else if (key == LogicalKeyboardKey.arrowDown) {
               _game!.moveDown();
               return KeyEventResult.handled;
-            } else if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.dpadLeft) {
+            } else if (key == LogicalKeyboardKey.arrowLeft) {
               _game!.moveLeft();
               return KeyEventResult.handled;
-            } else if (key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.dpadRight) {
+            } else if (key == LogicalKeyboardKey.arrowRight) {
               _game!.moveRight();
               return KeyEventResult.handled;
-            } else if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select || key == LogicalKeyboardKey.dpadCenter) {
+            } else if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select) {
               _game!.zoomIn();
               return KeyEventResult.handled;
             }

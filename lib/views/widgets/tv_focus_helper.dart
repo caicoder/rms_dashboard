@@ -65,7 +65,6 @@ class _TvFocusHelperState extends State<TvFocusHelper> {
 
   bool _isSelectKey(LogicalKeyboardKey key) {
     return key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.dpadCenter ||
         key == LogicalKeyboardKey.select ||
         key == LogicalKeyboardKey.space ||
         key == LogicalKeyboardKey.numpadEnter;
@@ -75,7 +74,7 @@ class _TvFocusHelperState extends State<TvFocusHelper> {
     final key = event.logicalKey;
 
     // Handle Menu / ContextMenu keys directly for onLongPress
-    if (key == LogicalKeyboardKey.menu || key == LogicalKeyboardKey.contextMenu) {
+    if (key == LogicalKeyboardKey.contextMenu) {
       if (event is KeyDownEvent && widget.onLongPress != null) {
         widget.onLongPress!();
         return KeyEventResult.handled;
@@ -146,7 +145,12 @@ class _TvFocusHelperState extends State<TvFocusHelper> {
             ),
             child: ClipRRect(
               borderRadius: widget.borderRadius,
-              child: widget.child,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onTap,
+                onLongPress: widget.onLongPress,
+                child: widget.child,
+              ),
             ),
           ),
         ),
