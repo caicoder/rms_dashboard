@@ -6,6 +6,7 @@ import 'package:universal_platform/universal_platform.dart';
 import 'package:universal_html/html.dart' as html;
 import '../../config/ding_auth_config.dart';
 import '../../controllers/auth_controller.dart';
+import '../widgets/tv_focus_helper.dart';
 import 'ding_webview_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -225,9 +226,11 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                             SizedBox(height: isSmallScreen ? 32 : 48),
 
                             // DingTalk Login Button
-                            InkWell(
+                            TvFocusHelper(
+                              autofocus: true,
                               onTap: _handleDingTalkLogin,
                               borderRadius: BorderRadius.circular(16),
+                              focusColor: const Color(0xFF3B82F6),
                               child: Container(
                                 width: double.infinity,
                                 padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 14 : 16),

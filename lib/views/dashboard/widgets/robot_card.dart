@@ -4,6 +4,7 @@ import '../../../models/robot_model.dart';
 import 'package:get/get.dart';
 import '../../details/robot_detail_page.dart';
 import '../../../controllers/robot_controller.dart';
+import '../../widgets/tv_focus_helper.dart';
 
 class RobotCard extends StatelessWidget {
   final RobotModel robot;
@@ -20,7 +21,7 @@ class RobotCard extends StatelessWidget {
         ? const Color(0xFFEF4444) 
         : (isOffline ? Colors.grey : const Color(0xFF3B82F6));
         
-    return GestureDetector(
+    return TvFocusHelper(
       onTap: () {
         Get.to(() => RobotDetailPage(robotId: robot.id));
       },
@@ -44,6 +45,8 @@ class RobotCard extends StatelessWidget {
           ),
         );
       },
+      focusColor: themeColor,
+      borderRadius: BorderRadius.circular(24),
       child: AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,

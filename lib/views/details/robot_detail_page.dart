@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../models/robot_model.dart';
 import '../../models/map_data.dart';
 import '../../controllers/robot_controller.dart';
 import '../../controllers/mqtt_controller.dart';
+import '../widgets/tv_focus_helper.dart';
 import 'flame/robot_map_game.dart';
 
 class RobotDetailPage extends StatefulWidget {
@@ -34,6 +36,7 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   bool _isSendingCommand = false;
   final List<Map<String, dynamic>> _commandLog = [];
   final TextEditingController _customMsgController = TextEditingController();
+  final FocusNode _mapFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -89,6 +92,7 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     // 显式释放 C++ 层的图片图形内存，防止不断进出详情页导致 OOM
     _game?.mapData.image.dispose();
     _customMsgController.dispose();
+    _mapFocusNode.dispose();
     super.dispose();
   }
 
@@ -206,7 +210,45 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
 
     // Wrap GameWidget properly
     return Positioned.fill(
-      child: GameWidget(game: _game!),
+      child: Focus(
+        focusNode: _mapFocusNode,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            final key = event.logicalKey;
+            if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.dpadUp) {
+              _game!.moveUp();
+              return KeyEventResult.handled;
+            } else if (key == LogicalKeyboardKey.arrowDown || key == LogicalKeyboardKey.dpadDown) {
+              _game!.moveDown();
+              return KeyEventResult.handled;
+            } else if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.dpadLeft) {
+              _game!.moveLeft();
+              return KeyEventResult.handled;
+            } else if (key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.dpadRight) {
+              _game!.moveRight();
+              return KeyEventResult.handled;
+            } else if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select || key == LogicalKeyboardKey.dpadCenter) {
+              _game!.zoomIn();
+              return KeyEventResult.handled;
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Builder(
+          builder: (context) {
+            final isFocused = Focus.of(context).hasFocus;
+            return Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: isFocused ? Colors.greenAccent : Colors.transparent,
+                  width: 3.0,
+                ),
+              ),
+              child: GameWidget(game: _game!),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -237,10 +279,14 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   }
 
   Widget _buildControlButton(IconData icon, String tooltip, VoidCallback onPressed) {
-    return IconButton(
-      icon: Icon(icon, color: Colors.white70),
-      tooltip: tooltip,
-      onPressed: onPressed,
+    return TvFocusHelper(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(20),
+      focusColor: Colors.blueAccent,
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Icon(icon, color: Colors.white70, size: 20),
+      ),
     );
   }
 
@@ -284,31 +330,29 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     bool isActive = _isPanelOpen && _activePanel == panelId;
     bool isSmallScreen = MediaQuery.of(context).size.width < 600;
     
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _togglePanel(panelId),
-        borderRadius: BorderRadius.circular(30),
-        child: Container(
-          padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 12 : 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: isActive ? color.withOpacity(0.2) : const Color(0xFF1E293B).withOpacity(0.9),
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: isActive ? color : color.withOpacity(0.3), width: 1.5),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 5, offset: const Offset(0, 3))
+    return TvFocusHelper(
+      onTap: () => _togglePanel(panelId),
+      borderRadius: BorderRadius.circular(30),
+      focusColor: color,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 12 : 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isActive ? color.withOpacity(0.2) : const Color(0xFF1E293B).withOpacity(0.9),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: isActive ? color : color.withOpacity(0.3), width: 1.5),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 5, offset: const Offset(0, 3))
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 20),
+            if (!isSmallScreen) ...[
+              const SizedBox(width: 8),
+              Text(label, style: TextStyle(color: isActive ? Colors.white : Colors.white70, fontWeight: FontWeight.w600)),
             ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 20),
-              if (!isSmallScreen) ...[
-                const SizedBox(width: 8),
-                Text(label, style: TextStyle(color: isActive ? Colors.white : Colors.white70, fontWeight: FontWeight.w600)),
-              ],
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -472,9 +516,14 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
                     const SizedBox(width: 6),
                     const Text('发送记录', style: TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.w600)),
                     const Spacer(),
-                    GestureDetector(
+                    TvFocusHelper(
                       onTap: () => setState(() => _commandLog.clear()),
-                      child: const Text('清空', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                      borderRadius: BorderRadius.circular(8),
+                      focusColor: Colors.redAccent,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: Text('清空', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                      ),
                     ),
                   ],
                 ),
@@ -520,40 +569,37 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   }
 
   Widget _buildCommandTile(_CommandItem item) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _isSendingCommand ? null : item.onTap,
-        borderRadius: BorderRadius.circular(16),
-        splashColor: item.color.withOpacity(0.1),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: item.color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: item.color.withOpacity(0.3)),
-                ),
-                child: Icon(item.icon, color: item.color, size: 20),
+    return TvFocusHelper(
+      onTap: _isSendingCommand ? () {} : item.onTap,
+      borderRadius: BorderRadius.circular(16),
+      focusColor: item.color,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: item.color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: item.color.withOpacity(0.3)),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 2),
-                    Text(item.subtitle, style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 12)),
-                  ],
-                ),
+              child: Icon(item.icon, color: item.color, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(item.subtitle, style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 12)),
+                ],
               ),
-              Icon(Icons.send_rounded, color: item.color.withOpacity(0.6), size: 18),
-            ],
-          ),
+            ),
+            Icon(Icons.send_rounded, color: item.color.withOpacity(0.6), size: 18),
+          ],
         ),
       ),
     );
@@ -623,7 +669,8 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
               const Text('拉取指定日期安卓日志', style: TextStyle(color: Colors.white, fontSize: 15)),
             ],
           ),
-          content: GestureDetector(
+          content: TvFocusHelper(
+            autofocus: true,
             onTap: () async {
               final picked = await showDatePicker(
                 context: context,
@@ -637,6 +684,8 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
               );
               if (picked != null) setDialogState(() => selectedDate = picked);
             },
+            borderRadius: BorderRadius.circular(12),
+            focusColor: Colors.orangeAccent,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
@@ -705,6 +754,7 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
         ),
         content: TextField(
           controller: textController,
+          autofocus: true,
           maxLines: 3,
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
@@ -772,6 +822,7 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
           width: 400,
           child: TextField(
             controller: _customMsgController,
+            autofocus: true,
             maxLines: 12,
             style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13, height: 1.6),
             decoration: InputDecoration(
@@ -1201,7 +1252,11 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('关闭', style: TextStyle(color: Colors.white70))),
+          TextButton(
+            autofocus: true,
+            onPressed: () => Get.back(),
+            child: const Text('关闭', style: TextStyle(color: Colors.white70)),
+          ),
         ],
       ),
     );

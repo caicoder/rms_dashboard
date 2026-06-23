@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'dart:convert';
 import '../../controllers/robot_controller.dart';
 import '../../controllers/mqtt_controller.dart';
+import '../widgets/tv_focus_helper.dart';
 import 'widgets/robot_card.dart';
 
 class DashboardPage extends StatelessWidget {
@@ -27,6 +28,7 @@ class DashboardPage extends StatelessWidget {
           children: [
             TextField(
               controller: snController,
+              autofocus: true,
               style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
                 labelText: '输入设备 SN 码 (e.g., SN001234)',
@@ -49,6 +51,13 @@ class DashboardPage extends StatelessWidget {
           ],
         ),
         actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _showBatchAddDialog(context);
+            },
+            child: const Text('批量导入 (Batch Import)', style: TextStyle(color: Colors.amberAccent)),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('取消 (Cancel)', style: TextStyle(color: Colors.white70)),
@@ -81,6 +90,7 @@ class DashboardPage extends StatelessWidget {
           height: 300,
           child: TextField(
             controller: jsonController,
+            autofocus: true,
             maxLines: 15,
             style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
             decoration: InputDecoration(
@@ -174,8 +184,11 @@ class DashboardPage extends StatelessWidget {
           //   backgroundColor: Colors.redAccent.withOpacity(0.8),
           // ),
           // const SizedBox(height: 16),
-          GestureDetector(
+          TvFocusHelper(
+            onTap: () => _showAddRobotDialog(context),
             onLongPress: () => _showBatchAddDialog(context),
+            borderRadius: BorderRadius.circular(30),
+            focusColor: const Color(0xFF3B82F6),
             child: FloatingActionButton.extended(
               heroTag: 'add_device',
               onPressed: () => _showAddRobotDialog(context),
@@ -331,22 +344,20 @@ class DashboardPage extends StatelessWidget {
                     ),
                     if (!isConnected) ...[
                       const SizedBox(width: 8),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: isRetrying ? null : () => mqttController.manualReconnect(),
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: isRetrying ? Colors.grey.withOpacity(0.2) : Colors.blueAccent.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              isRetrying ? Icons.hourglass_empty : Icons.refresh_rounded, 
-                              color: isRetrying ? Colors.grey : Colors.blueAccent, 
-                              size: 18
-                            ),
+                      TvFocusHelper(
+                        onTap: isRetrying ? () {} : () => mqttController.manualReconnect(),
+                        borderRadius: BorderRadius.circular(20),
+                        focusColor: Colors.blueAccent,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: isRetrying ? Colors.grey.withOpacity(0.2) : Colors.blueAccent.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isRetrying ? Icons.hourglass_empty : Icons.refresh_rounded, 
+                            color: isRetrying ? Colors.grey : Colors.blueAccent, 
+                            size: 18
                           ),
                         ),
                       )
