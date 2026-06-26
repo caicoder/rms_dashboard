@@ -25,7 +25,7 @@ fi
 echo "Building Flutter macOS application in release mode..."
 flutter build macos --release
 
-APP_PATH="build/macos/Build/Products/Release/rms_dashboard.app"
+APP_PATH="build/macos/Build/Products/Release/骅羲监控.app"
 
 if [ ! -d "$APP_PATH" ]; then
   echo "Error: Release build failed or app bundle not found at $APP_PATH"
@@ -59,11 +59,11 @@ fi
 
 # Clean up any existing temporary/final DMG files
 rm -f build/temp.dmg
-rm -f rms_dashboard.dmg
+rm -f 骅羲监控.dmg
 
 # 4. Create temporary read-write DMG
 echo "Creating temporary read-write disk image..."
-hdiutil create -srcfolder "$STAGING_DIR" -volname "RMS Dashboard" -fs HFS+ -fsargs "-c c=64,a=16,e=16" -format UDRW build/temp.dmg
+hdiutil create -srcfolder "$STAGING_DIR" -volname "骅羲监控" -fs HFS+ -fsargs "-c c=64,a=16,e=16" -format UDRW build/temp.dmg
 
 # 5. Mount the disk image and get device node
 echo "Mounting temporary disk image..."
@@ -77,7 +77,7 @@ if [ "$HAS_BACKGROUND" = true ]; then
   # AppleScript to set custom background, icon positions, and windows size
   osascript <<EOF
   tell application "Finder"
-    tell disk "RMS Dashboard"
+    tell disk "骅羲监控"
       open
       set current view of container window to icon view
       set statusbar visible of container window to false
@@ -105,7 +105,7 @@ if [ "$HAS_BACKGROUND" = true ]; then
       # Position the icons on the background placeholders
       # Left placeholder: {160, 320}
       # Right placeholder: {440, 320}
-      set position of item "rms_dashboard.app" to {160, 320}
+      set position of item "骅羲监控.app" to {160, 320}
       set position of item "Applications" to {440, 320}
       
       update without registering applications
@@ -118,7 +118,7 @@ else
   # Default basic styling if no background image is present
   osascript <<EOF
   tell application "Finder"
-    tell disk "RMS Dashboard"
+    tell disk "骅羲监控"
       open
       set current view of container window to icon view
       set the bounds of container window to {400, 100, 1000, 500}
@@ -127,7 +127,7 @@ else
       try
         set arrangement of theViewOptions to not arranged
       end try
-      set position of item "rms_dashboard.app" to {150, 200}
+      set position of item "骅羲监控.app" to {150, 200}
       set position of item "Applications" to {450, 200}
       update without registering applications
       delay 3
@@ -148,7 +148,7 @@ sleep 2
 
 # 8. Convert to compressed, read-only DMG
 echo "Converting to final compressed DMG..."
-hdiutil convert build/temp.dmg -format UDZO -imagekey zlib-level=9 -o rms_dashboard.dmg
+hdiutil convert build/temp.dmg -format UDZO -imagekey zlib-level=9 -o 骅羲监控.dmg
 
 # 9. Clean up temporary files
 echo "Cleaning up temporary files..."
@@ -157,5 +157,5 @@ rm -f build/temp.dmg
 
 echo "--------------------------------------------------------"
 echo "  Success! Your installer is ready at:"
-echo "  $(pwd)/rms_dashboard.dmg"
+echo "  $(pwd)/骅羲监控.dmg"
 echo "--------------------------------------------------------"

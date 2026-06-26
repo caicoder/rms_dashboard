@@ -30,8 +30,17 @@ jobs:
       - name: Build Windows Release
         run: flutter build windows --release
 
-      - name: Upload Artifacts
+      - name: Build Installer using Inno Setup
+        run: iscc windows/installer.iss
+
+      - name: Upload ZIP Release (Folder)
         uses: actions/upload-artifact@v4
         with:
-          name: windows-release-app
+          name: windows-release-zip
           path: build/windows/x64/runner/Release/
+
+      - name: Upload EXE Setup (Single File Installer)
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-setup-exe
+          path: build/windows/installer/骅羲监控_setup.exe
