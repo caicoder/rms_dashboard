@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:universal_html/html.dart' as html;
+import 'package:desktop_webview_window/desktop_webview_window.dart';
 import '../../config/ding_auth_config.dart';
 import '../../controllers/auth_controller.dart';
 import '../widgets/tv_focus_helper.dart';
@@ -62,23 +63,61 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     super.dispose();
   }
 
+  void _openDesktopWebView(String url) async {
+    try {
+      final webview = await WebviewWindow.create(
+        configuration: const CreateConfiguration(
+          title: "钉钉员工验证登录",
+          titleBarTopPadding: 0,
+        ),
+      );
+      
+      webview.addOnUrlRequestCallback((url) async {
+        if (url.startsWith(DingAuthConfig.redirectUri)) {
+          final uri = Uri.parse(url);
+          final code = uri.queryParameters["code"] ?? uri.queryParameters["authCode"];
+          
+          if (code != null && code.isNotEmpty) {
+            await _authController.loginWithMockedBackend(code);
+          } else {
+            Get.snackbar("登录失败", "未获取到授权Code. 参数: ${uri.queryParameters}", 
+              backgroundColor: Colors.red, 
+              colorText: Colors.white, 
+              duration: const Duration(seconds: 5)
+            );
+          }
+          webview.close();
+        }
+      });
+      
+      webview.launch(url);
+    } catch (e) {
+      print("Error launching desktop webview: $e");
+      Get.snackbar("错误", "无法打开桌面浏览器窗口: $e", 
+        backgroundColor: Colors.red, 
+        colorText: Colors.white
+      );
+    }
+  }
+
   void _handleDingTalkLogin() {
-    final params = {
-      "redirect_uri": Uri.encodeComponent(DingAuthConfig.redirectUri),
+    final uri = Uri.https("login.dingtalk.com", "/oauth2/auth", {
+      "redirect_uri": DingAuthConfig.redirectUri,
       "response_type": "code",
       "client_id": DingAuthConfig.appKey,
       "scope": "openid Contact.Read.User",
       "state": DateTime.now().millisecondsSinceEpoch.toString()
-    };
-    
-    final query = params.entries.map((e) => "${e.key}=${e.value}").join("&");
-    final authUrl = "https://login.dingtalk.com/oauth2/auth?$query";
+    });
+    final authUrl = uri.toString();
 
     if (UniversalPlatform.isWeb) {
       // Web: Open in new window
       html.window.open(authUrl, "_blank");
+    } else if (UniversalPlatform.isWindows || UniversalPlatform.isMacOS) {
+      // Desktop: Open WebviewWindow
+      _openDesktopWebView(authUrl);
     } else {
-      // Native (Android/iOS/macOS): Open WebView
+      // Mobile (Android/iOS): Open in-app WebView
       Get.to(() => DingWebviewPage(authUrl: authUrl));
     }
   }

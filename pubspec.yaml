@@ -30,6 +30,7 @@ dependencies:
   local_notifier: ^0.1.6
   audioplayers: ^5.2.1
   flutter_local_notifications: ^17.0.0
+  desktop_webview_window: ^0.2.3
 
 dev_dependencies:
   flutter_test:

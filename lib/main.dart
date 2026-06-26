@@ -7,7 +7,12 @@ import 'views/dashboard/dashboard_page.dart';
 import 'views/login/login_page.dart';
 import 'config/notification_helper.dart';
 
-void main() async {
+import 'package:desktop_webview_window/desktop_webview_window.dart';
+
+void main(List<String> args) async {
+  if (runWebViewTitleBarWidget(args)) {
+    return;
+  }
   WidgetsFlutterBinding.ensureInitialized();
   await NotificationHelper().initialize();
   WakelockPlus.enable();

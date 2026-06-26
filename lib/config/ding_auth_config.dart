@@ -1,6 +1,6 @@
 class DingAuthConfig {
   // Callback URL matching DingTalk configuration
-  static const String redirectUri = "https://www.huaxiai.com.cn";
+  static const String redirectUri = "https://www.huaxiai.com.cn/";
   
   // DingTalk AppKey
   static const String appKey = "dingboaqzi27igf7zidf";
