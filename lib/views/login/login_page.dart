@@ -241,7 +241,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                             // Title
                             Text(
                               "骅羲智能监控系统",
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: isSmallScreen ? 24 : 32,
                                 fontWeight: FontWeight.bold,
@@ -255,7 +255,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                             // Subtitle
                             Text(
                               "企业内部员工专属通道",
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: isSmallScreen ? 14 : 16,
                                 color: Colors.white70,
@@ -301,7 +301,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                     const SizedBox(width: 12),
                                     Text(
                                       "钉钉一键授权登录",
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: isSmallScreen ? 16 : 18,
                                         fontWeight: FontWeight.w600,
