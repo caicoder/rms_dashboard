@@ -1,7 +1,7 @@
 #define MyAppName "骅羲监控"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Huaxi"
-#define MyAppExeName "骅羲监控.exe"
+#define MyAppExeName "rms_dashboard.exe"
 
 [Setup]
 ; AppId is a unique identifier for this application. Do not use the same value in other installers.
