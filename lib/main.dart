@@ -5,9 +5,11 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'controllers/auth_controller.dart';
 import 'views/dashboard/dashboard_page.dart';
 import 'views/login/login_page.dart';
+import 'config/notification_helper.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await NotificationHelper().initialize();
   WakelockPlus.enable();
   Get.put(AuthController()); // Initialize AuthController
   runApp(const RMSApp());

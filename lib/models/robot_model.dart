@@ -219,6 +219,7 @@ class RobotModel {
   List<TrajectoryPoint> trajectory;
   String patrolInfo;
   bool hasFallAlarm;
+  bool isFavorite; // 收藏属性
 
   // Caching specific histories
   Map<String, PatrolSession> patrolHistory;
@@ -274,6 +275,7 @@ class RobotModel {
     List<TrajectoryPoint>? trajectory,
     this.patrolInfo = '',
     this.hasFallAlarm = false,
+    this.isFavorite = false,
     Map<String, PatrolSession>? patrolHistory,
     List<AlarmEvent>? alarmHistory,
     List<HealthMeasurement>? healthHistory,
@@ -302,6 +304,7 @@ class RobotModel {
     'trajectory': trajectory.map((e) => e.toJson()).toList(),
     'patrolInfo': patrolInfo,
     'hasFallAlarm': hasFallAlarm,
+    'isFavorite': isFavorite,
     'patrolHistory': patrolHistory.map((k, v) => MapEntry(k, v.toJson())),
     'alarmHistory': alarmHistory.map((e) => e.toJson()).toList(),
     'healthHistory': healthHistory.map((e) => e.toJson()).toList(),
@@ -326,6 +329,7 @@ class RobotModel {
         .toList() ?? [],
     patrolInfo: json['patrolInfo'] ?? '',
     hasFallAlarm: json['hasFallAlarm'] ?? false,
+    isFavorite: json['isFavorite'] ?? false,
     patrolHistory: json['patrolHistory'] is Map
         ? (json['patrolHistory'] as Map<String, dynamic>).map((k, e) => MapEntry(k, PatrolSession.fromJson(e)))
         : (json['patrolHistory'] is List
@@ -344,12 +348,14 @@ class ActiveAlarmItem {
   final String organization;
   final String alarmTitle;
   final DateTime time;
+  final String? imgUrl; // 告警图片URL
 
   ActiveAlarmItem({
     required this.robotId,
     required this.organization,
     required this.alarmTitle,
     required this.time,
+    this.imgUrl,
   });
 
   Map<String, dynamic> toJson() => {
@@ -357,6 +363,7 @@ class ActiveAlarmItem {
     'organization': organization,
     'alarmTitle': alarmTitle,
     'time': time.toIso8601String(),
+    'imgUrl': imgUrl,
   };
 
   factory ActiveAlarmItem.fromJson(Map<String, dynamic> json) => ActiveAlarmItem(
@@ -364,5 +371,6 @@ class ActiveAlarmItem {
     organization: json['organization'] ?? '',
     alarmTitle: json['alarmTitle'] ?? '',
     time: json['time'] != null ? DateTime.parse(json['time']) : DateTime.now(),
+    imgUrl: json['imgUrl'],
   );
 }

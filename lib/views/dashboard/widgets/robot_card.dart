@@ -161,7 +161,7 @@ class RobotCard extends StatelessWidget {
                     ),
                     
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(16),
@@ -172,19 +172,34 @@ class RobotCard extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
                               _buildPositionStat('Axis X', robot.positionX, themeColor),
-                              Container(width: 1, height: 30, color: Colors.white.withOpacity(0.1)),
+                              Container(width: 1, height: 20, color: Colors.white.withOpacity(0.1)),
                               _buildPositionStat('Axis Y', robot.positionY, themeColor),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.sync_rounded, size: 12, color: Colors.white38),
+                              TvFocusHelper(
+                                onTap: () {
+                                  Get.find<RobotController>().toggleFavorite(robot.id);
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                focusColor: Colors.amberAccent,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4.0),
+                                  child: Icon(
+                                    robot.isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
+                                    color: robot.isFavorite ? Colors.amberAccent : Colors.white38,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              const Icon(Icons.sync_rounded, size: 12, color: Colors.white70),
                               const SizedBox(width: 4),
                               Text(
                                 '最新更新时间 ${robot.lastUpdated.hour.toString().padLeft(2, '0')}:${robot.lastUpdated.minute.toString().padLeft(2, '0')}:${robot.lastUpdated.second.toString().padLeft(2, '0')}',
-                                style: const TextStyle(color: Colors.white54, fontSize: 11),
+                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                               ),
                             ],
                           )
@@ -302,14 +317,14 @@ class RobotCard extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 0.5),
+          style: const TextStyle(color: Colors.white54, fontSize: 9, letterSpacing: 0.5),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         Text(
           value.toStringAsFixed(2),
           style: const TextStyle(
             color: Colors.white, 
-            fontSize: 18, 
+            fontSize: 14, 
             fontWeight: FontWeight.w700,
             fontFeatures: [FontFeature.tabularFigures()],
           ),

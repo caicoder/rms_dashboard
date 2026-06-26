@@ -1,8 +1,10 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:async';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:universal_platform/universal_platform.dart';
+import 'package:audioplayers/audioplayers.dart';
+import '../config/notification_helper.dart';
 import '../models/robot_model.dart';
 import 'mqtt_controller.dart';
 
@@ -11,18 +13,45 @@ class RobotController extends GetxController {
   final Map<String, RobotModel> _robotsMap = {};
   var activeAlarms = <ActiveAlarmItem>[].obs;
   
+  var searchQuery = ''.obs; // 搜索关键字
+  var isAlarmsCollapsed = false.obs; // 告警面板是否收起
+  
+  final AudioPlayer _audioPlayer = AudioPlayer(); // 音频播放器
+  
   var currentPage = 0.obs;
   final int itemsPerPage = 16;
   Timer? _offlineCheckTimer;
 
-  int get totalPages => (robots.isEmpty) ? 1 : (robots.length / itemsPerPage).ceil();
+  int get totalPages => (filteredRobots.isEmpty) ? 1 : (filteredRobots.length / itemsPerPage).ceil();
+
+  List<RobotModel> get filteredRobots {
+    if (searchQuery.value.trim().isEmpty) {
+      return robots;
+    }
+    final query = searchQuery.value.trim().toLowerCase();
+    return robots.where((r) {
+      return r.id.toLowerCase().contains(query) ||
+             r.organization.toLowerCase().contains(query);
+    }).toList();
+  }
 
   List<RobotModel> get currentRobots {
-    if (robots.isEmpty) return [];
+    final list = filteredRobots;
+    if (list.isEmpty) return [];
     int start = currentPage.value * itemsPerPage;
     int end = start + itemsPerPage;
-    if (end > robots.length) end = robots.length;
-    return robots.sublist(start, end);
+    if (end > list.length) end = list.length;
+    return list.sublist(start, end);
+  }
+
+  void toggleFavorite(String id) {
+    var robot = _robotsMap[id];
+    if (robot != null) {
+      robot.isFavorite = !robot.isFavorite;
+      _sortRobots();
+      robots.refresh();
+      saveRobots();
+    }
   }
 
   @override
@@ -62,6 +91,7 @@ class RobotController extends GetxController {
         for (var r in robots) {
           _robotsMap[r.id] = r;
         }
+        _sortRobots();
       }
       final List<String>? deletedIds = prefs.getStringList('deleted_robots');
       if (deletedIds != null) {
@@ -111,6 +141,7 @@ class RobotController extends GetxController {
     );
     robots.add(newRobot);
     _robotsMap[sn] = newRobot;
+    _sortRobots();
     
     saveRobots();
     if (showSnackbar) {
@@ -172,6 +203,9 @@ class RobotController extends GetxController {
     
     if (data['taskList'] is List) {
       robot.taskList = List<int>.from(data['taskList']);
+      if (robot.taskList.isNotEmpty && robot.taskList[0] == 0) {
+        robot.hasFallAlarm = false;
+      }
     }
     
     robot.soc = int.tryParse(data['soc']?.toString() ?? '0') ?? 0;
@@ -322,6 +356,24 @@ class RobotController extends GetxController {
     }
   }
 
+  void _playAlarmSound() async {
+    try {
+      // Loop mixkit siren alert audio
+      await _audioPlayer.play(UrlSource('https://assets.mixkit.co/active_storage/sfx/2869/2869-84.wav'));
+      await _audioPlayer.setReleaseMode(ReleaseMode.loop);
+      
+      Timer(const Duration(seconds: 10), () async {
+        await _audioPlayer.stop();
+      });
+    } catch (e) {
+      print('Error playing alarm sound: $e');
+    }
+  }
+
+  void _showLocalNotification(String title, String message) {
+    NotificationHelper().showNotification(title, message);
+  }
+
   void updateAlarmEvent(String id, Map<String, dynamic> body, int subtype) {
     var robot = _getOrAddRobot(id);
     if (robot != null) {
@@ -352,7 +404,12 @@ class RobotController extends GetxController {
         organization: robot.organization.isNotEmpty ? robot.organization : '设备 $id',
         alarmTitle: title,
         time: DateTime.now(),
+        imgUrl: body['imgUrl']?.toString(),
       ));
+
+      // Trigger local sound and push notification
+      _playAlarmSound();
+      _showLocalNotification('🚨 $title', '设备 $id 发生 $title！');
 
       Get.snackbar('🚨 $title', '设备 $id 发生 $title！', 
         snackPosition: SnackPosition.TOP, 
@@ -419,6 +476,10 @@ class RobotController extends GetxController {
 
   void _sortRobots() {
     robots.sort((a, b) {
+      // 0. 收藏的设备排在最最前面
+      if (a.isFavorite && !b.isFavorite) return -1;
+      if (!a.isFavorite && b.isFavorite) return 1;
+
       // 1. 急停排在最前面 (eStop == true)
       if (a.eStop && !b.eStop) return -1;
       if (!a.eStop && b.eStop) return 1;

@@ -9,12 +9,14 @@ import '../../controllers/mqtt_controller.dart';
 import '../../models/robot_model.dart';
 import '../widgets/tv_focus_helper.dart';
 import 'widgets/robot_card.dart';
+import '../details/robot_detail_page.dart';
 
 class DashboardPage extends StatelessWidget {
   DashboardPage({Key? key}) : super(key: key);
 
   final RobotController robotController = Get.put(RobotController(), permanent: true);
   final MqttController mqttController = Get.put(MqttController(), permanent: true);
+  final TextEditingController _searchController = TextEditingController();
 
   void _showAddRobotDialog(BuildContext context) {
     final TextEditingController snController = TextEditingController();
@@ -217,13 +219,14 @@ class DashboardPage extends StatelessWidget {
           child: Column(
             children: [
               _buildHeader(context),
+              _buildSearchBar(context),
               Expanded(
                 child: Stack(
                   children: [
                     Obx(() {
-                      final robots = robotController.robots; // View all robots for pagination
+                      final robots = robotController.filteredRobots;
                       if (robots.isEmpty) {
-                        return _buildEmptyState();
+                        return _buildEmptyState(isSearch: robotController.searchQuery.value.isNotEmpty);
                       }
                       
                       return Padding(
@@ -255,11 +258,12 @@ class DashboardPage extends StatelessWidget {
                       final alarms = robotController.activeAlarms;
                       if (alarms.isEmpty) return const SizedBox.shrink();
                       
+                      final isCollapsed = robotController.isAlarmsCollapsed.value;
                       return Positioned(
                         top: 16,
-                        bottom: 16,
+                        bottom: isCollapsed ? null : 16,
                         right: 24,
-                        width: 320,
+                        width: isCollapsed ? 200 : 320,
                         child: _buildFloatingAlarmList(context, alarms),
                       );
                     }),
@@ -392,27 +396,115 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState({bool isSearch = false}) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.satellite_alt_rounded, size: 80, color: Colors.white.withOpacity(0.2)),
+          Icon(
+            isSearch ? Icons.search_off_rounded : Icons.satellite_alt_rounded,
+            size: 80,
+            color: Colors.white.withOpacity(0.2),
+          ),
           const SizedBox(height: 24),
-          const Text(
-            '尚未添加设备',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Colors.white70),
+          Text(
+            isSearch ? '没有找到匹配的设备' : '尚未添加设备',
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Colors.white70),
           ),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: const Text(
-              '点击右下角的"添加设备"按钮输入 SN 码，开始监听机器人状态。',
+            child: Text(
+              isSearch
+                  ? '请尝试输入不同的 SN 或机构名称进行搜索。'
+                  : '点击右下角的"添加设备"按钮输入 SN 码，开始监听机器人状态。',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white54, fontSize: 16),
+              style: const TextStyle(color: Colors.white54, fontSize: 16),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar(BuildContext context) {
+    return Obx(() {
+      final query = robotController.searchQuery.value;
+      if (query.isEmpty && _searchController.text.isNotEmpty) {
+        _searchController.text = '';
+      }
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 500),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B).withOpacity(0.5),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (val) {
+                robotController.searchQuery.value = val;
+              },
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: '搜索 SN 或机构名称...',
+                hintStyle: const TextStyle(color: Colors.white30, fontSize: 14),
+                prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                suffixIcon: query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.white54),
+                        onPressed: () {
+                          _searchController.clear();
+                          robotController.searchQuery.value = '';
+                        },
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  void _showLargeImageDialog(BuildContext context, String imgUrl) {
+    const String prefix = 'https://huaxi-1330823579.cos.ap-shanghai.myqcloud.com/robot';
+    final fullUrl = imgUrl.startsWith('http') ? imgUrl : prefix + imgUrl.trim();
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: InteractiveViewer(
+                child: Image.network(
+                  fullUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Center(
+                    child: Text('图片加载失败', style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -449,6 +541,7 @@ class DashboardPage extends StatelessWidget {
   }
 
   Widget _buildFloatingAlarmList(BuildContext context, List<ActiveAlarmItem> alarms) {
+    final isCollapsed = robotController.isAlarmsCollapsed.value;
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B).withOpacity(0.85),
@@ -472,6 +565,7 @@ class DashboardPage extends StatelessWidget {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               // Header
               Container(
@@ -484,9 +578,9 @@ class DashboardPage extends StatelessWidget {
                   children: [
                     const Icon(Icons.ring_volume_rounded, color: Colors.redAccent, size: 20),
                     const SizedBox(width: 10),
-                    const Text(
-                      '实时告警监控',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                    Text(
+                      isCollapsed ? '告警' : '实时告警监控',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                     const Spacer(),
                     Container(
@@ -500,92 +594,140 @@ class DashboardPage extends StatelessWidget {
                         style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    // Collapse/Expand Button
+                    TvFocusHelper(
+                      onTap: () {
+                        robotController.isAlarmsCollapsed.value = !robotController.isAlarmsCollapsed.value;
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      focusColor: Colors.redAccent,
+                      child: Padding(
+                        padding: const EdgeInsets.all(4.0),
+                        child: Icon(
+                          isCollapsed 
+                              ? Icons.keyboard_arrow_left_rounded 
+                              : Icons.keyboard_arrow_right_rounded,
+                          color: Colors.white70,
+                          size: 20,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
               
               // Alarms List
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: alarms.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    // Reverse to show newest at the top
-                    final alarm = alarms[alarms.length - 1 - index];
-                    final timeStr = DateFormat('HH:mm:ss').format(alarm.time);
-                    
-                    return Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.03),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withOpacity(0.05)),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  alarm.organization,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w500),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'SN: ${alarm.robotId}',
-                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(height: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.redAccent.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
+              if (!isCollapsed)
+                Expanded(
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: alarms.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      // Reverse to show newest at the top
+                      final alarm = alarms[alarms.length - 1 - index];
+                      final timeStr = DateFormat('HH:mm:ss').format(alarm.time);
+                      
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.03),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white.withOpacity(0.05)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: TvFocusHelper(
+                                onTap: () {
+                                  Get.to(() => RobotDetailPage(robotId: alarm.robotId));
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                focusColor: Colors.redAccent,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        alarm.organization,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w500),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'SN: ${alarm.robotId}',
+                                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.redAccent.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
+                                        ),
+                                        child: Text(
+                                          alarm.alarmTitle,
+                                          style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                      if (alarm.imgUrl != null && alarm.imgUrl!.isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        GestureDetector(
+                                          onTap: () {
+                                            _showLargeImageDialog(context, alarm.imgUrl!);
+                                          },
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Image.network(
+                                              alarm.imgUrl!.startsWith('http') ? alarm.imgUrl! : 'https://huaxi-1330823579.cos.ap-shanghai.myqcloud.com/robot' + alarm.imgUrl!.trim(),
+                                              width: 120,
+                                              height: 80,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.access_time_rounded, color: Colors.white30, size: 12),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            timeStr,
+                                            style: const TextStyle(color: Colors.white30, fontSize: 11),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
-                                  child: Text(
-                                    alarm.alarmTitle,
-                                    style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
-                                  ),
                                 ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.access_time_rounded, color: Colors.white30, size: 12),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      timeStr,
-                                      style: const TextStyle(color: Colors.white30, fontSize: 11),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Close button to remove
-                          TvFocusHelper(
-                            onTap: () {
-                              robotController.removeActiveAlarm(alarm);
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            focusColor: Colors.redAccent,
-                            child: const Padding(
-                              padding: EdgeInsets.all(4.0),
-                              child: Icon(Icons.close, color: Colors.white54, size: 16),
+                            const SizedBox(width: 8),
+                            // Close button to remove
+                            TvFocusHelper(
+                              onTap: () {
+                                robotController.removeActiveAlarm(alarm);
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              focusColor: Colors.redAccent,
+                              child: const Padding(
+                                padding: EdgeInsets.all(4.0),
+                                child: Icon(Icons.close, color: Colors.white54, size: 16),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
             ],
           ),
         ),

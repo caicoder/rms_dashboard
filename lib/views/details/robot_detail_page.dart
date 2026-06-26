@@ -100,7 +100,27 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('设备详情: ${widget.robotId}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Obx(() {
+          final robotIndex = robotController.robots.indexWhere((r) => r.id == widget.robotId);
+          if (robotIndex < 0) {
+            return Text('设备详情: ${widget.robotId}', style: const TextStyle(fontWeight: FontWeight.bold));
+          }
+          final robot = robotController.robots[robotIndex];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'SN: ${widget.robotId}',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              Text(
+                robot.organization.isNotEmpty ? robot.organization : '未分配机构',
+                style: const TextStyle(fontSize: 12, color: Colors.white70),
+              ),
+            ],
+          );
+        }),
         backgroundColor: const Color(0xFF1E293B),
         elevation: 0,
       ),
@@ -1141,6 +1161,7 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
                                       _buildMiniStat('任务', _getTaskString(pt.taskList), Colors.blueAccent),
                                       _buildMiniStat('急停', pt.eStop ? '触发' : '正常', pt.eStop ? Colors.redAccent : Colors.greenAccent),
                                       _buildMiniStat('电量', '${pt.soc}%', pt.soc < 20 ? Colors.redAccent : Colors.greenAccent),
+                                      _buildMiniStat('充放电', pt.socStaus == 0 ? '未充电' : (pt.socStaus == 1 ? '放电' : '充电'), Colors.greenAccent),
                                       if (pt.type == 3 && pt.patrolInfo.isNotEmpty)
                                         _buildMiniStat('巡逻', pt.patrolInfo, Colors.orangeAccent),
                                     ],
@@ -1190,6 +1211,19 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
       }
     }
     return activeTasks.isEmpty ? '无任务' : activeTasks.join(',');
+  }
+
+  String _getTaskListDetailString(List<int> tasks) {
+    List<String> labels = ['报警', '检测', '人脸', '视频', '召唤'];
+    List<String> results = [];
+    for (int i = 0; i < labels.length; i++) {
+      int val = 0;
+      if (i < tasks.length) {
+        val = tasks[i];
+      }
+      results.add('${labels[i]}:$val');
+    }
+    return results.join(', ');
   }
 
   String _getNaturalStatus(int type, int status) {
@@ -1284,6 +1318,40 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     );
   }
 
+  void _showLargeImageDialog(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: InteractiveViewer(
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Center(
+                    child: Text('图片加载失败', style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildImageList(String? urls) {
     if (urls == null || urls.isEmpty) return const SizedBox();
     
@@ -1299,18 +1367,23 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
         runSpacing: 8,
         children: urlList.map((url) {
           final fullUrl = url.startsWith('http') ? url : prefix + url.trim();
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              fullUrl,
-              width: 80,
-              height: 80,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
+          return GestureDetector(
+            onTap: () {
+              _showLargeImageDialog(context, fullUrl);
+            },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                fullUrl,
                 width: 80,
                 height: 80,
-                color: Colors.white10,
-                child: const Icon(Icons.broken_image, color: Colors.white30),
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 80,
+                  height: 80,
+                  color: Colors.white10,
+                  child: const Icon(Icons.broken_image, color: Colors.white30),
+                ),
               ),
             ),
           );
