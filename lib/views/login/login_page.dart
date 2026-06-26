@@ -1,7 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:desktop_webview_window/desktop_webview_window.dart';
@@ -242,7 +241,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                             // Title
                             Text(
                               "骅羲智能监控系统",
-                              style: GoogleFonts.inter(
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
                                 fontSize: isSmallScreen ? 24 : 32,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
@@ -255,7 +255,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                             // Subtitle
                             Text(
                               "企业内部员工专属通道",
-                              style: GoogleFonts.inter(
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
                                 fontSize: isSmallScreen ? 14 : 16,
                                 color: Colors.white70,
                                 letterSpacing: 0.5,
@@ -300,7 +301,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                     const SizedBox(width: 12),
                                     Text(
                                       "钉钉一键授权登录",
-                                      style: GoogleFonts.inter(
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
                                         fontSize: isSmallScreen ? 16 : 18,
                                         fontWeight: FontWeight.w600,
                                         color: Colors.white,
@@ -324,7 +326,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                 const SizedBox(width: 8),
                                 Text(
                                   "数据传输已全程加密",
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
                                     fontSize: isSmallScreen ? 11 : 12,
                                     color: Colors.white.withOpacity(0.4),
                                   ),

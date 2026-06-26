@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'controllers/auth_controller.dart';
 import 'views/dashboard/dashboard_page.dart';
@@ -31,7 +30,6 @@ class RMSApp extends StatelessWidget {
       theme: ThemeData.dark().copyWith(
         primaryColor: const Color(0xFF0F172A),
         scaffoldBackgroundColor: const Color(0xFF0F172A),
-        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF3B82F6),
           secondary: Color(0xFF10B981),
