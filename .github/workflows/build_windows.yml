@@ -26,25 +26,23 @@ jobs:
 
       - name: Resolve Shengwang SDK Windows Symlink Issue
         run: |
-          # Locate the cached shengwang_rtc_engine directory dynamically
-          $cachedDir = Get-ChildItem -Path "$env:LOCALAPPDATA\Pub\Cache\hosted\pub.dev" -Filter "shengwang_rtc_engine-*" | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $cachedDir) {
-              $cachedDir = Get-ChildItem -Path "$env:PUB_CACHE\hosted\pub.dev" -Filter "shengwang_rtc_engine-*" | Select-Object -First 1 -ExpandProperty FullName
+          # Locate the DownloadSDK.cmake file inside the Pub Cache dynamically
+          $filePath = Get-ChildItem -Path "$env:LOCALAPPDATA\Pub\Cache\hosted\pub.dev" -Filter "DownloadSDK.cmake" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $filePath) {
+              $filePath = Get-ChildItem -Path "$env:PUB_CACHE\hosted\pub.dev" -Filter "DownloadSDK.cmake" -Recurse | Select-Object -First 1 -ExpandProperty FullName
           }
-          if (-not $cachedDir) {
-              Write-Error "Could not find cached shengwang_rtc_engine directory in Pub cache."
+          if ($filePath) {
+              Write-Output "Patching DownloadSDK.cmake at: $filePath"
+              $content = Get-Content $filePath
+              
+              # Prepend realpath component translation so CMake resolves symlink paths to actual directories during extraction
+              $patch = 'get_filename_component(CMAKE_CURRENT_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}" REALPATH)'
+              Set-Content $filePath -Value ($patch, $content)
+              Write-Output "Successfully patched DownloadSDK.cmake!"
+          } else {
+              Write-Error "Could not find DownloadSDK.cmake to patch inside Pub cache."
               exit 1
           }
-          Write-Output "Found shengwang_rtc_engine cache at: $cachedDir"
-          
-          # Remove the symlink
-          $targetPath = "windows/flutter/ephemeral/.plugin_symlinks/shengwang_rtc_engine"
-          if (Test-Path $targetPath) {
-              Remove-Item -Recurse -Force $targetPath
-          }
-          
-          # Copy files physically
-          Copy-Item -Recurse -Force $cachedDir $targetPath
         shell: powershell
 
       - name: Enable Windows Desktop
