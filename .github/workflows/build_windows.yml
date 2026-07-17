@@ -24,6 +24,29 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Resolve Shengwang SDK Windows Symlink Issue
+        run: |
+          # Locate the cached shengwang_rtc_engine directory dynamically
+          $cachedDir = Get-ChildItem -Path "$env:LOCALAPPDATA\Pub\Cache\hosted\pub.dev" -Filter "shengwang_rtc_engine-*" | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $cachedDir) {
+              $cachedDir = Get-ChildItem -Path "$env:PUB_CACHE\hosted\pub.dev" -Filter "shengwang_rtc_engine-*" | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $cachedDir) {
+              Write-Error "Could not find cached shengwang_rtc_engine directory in Pub cache."
+              exit 1
+          }
+          Write-Output "Found shengwang_rtc_engine cache at: $cachedDir"
+          
+          # Remove the symlink
+          $targetPath = "windows/flutter/ephemeral/.plugin_symlinks/shengwang_rtc_engine"
+          if (Test-Path $targetPath) {
+              Remove-Item -Recurse -Force $targetPath
+          }
+          
+          # Copy files physically
+          Copy-Item -Recurse -Force $cachedDir $targetPath
+        shell: powershell
+
       - name: Enable Windows Desktop
         run: flutter config --enable-windows-desktop
 
