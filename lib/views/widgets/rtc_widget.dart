@@ -229,14 +229,14 @@ class _RtcWidgetState extends State<RtcWidget> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        "监控频道: ${widget.channelId}",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      // Text(
+                      //   "监控频道: ${widget.channelId}",
+                      //   style: const TextStyle(
+                      //     color: Colors.white,
+                      //     fontSize: 13,
+                      //     fontWeight: FontWeight.w500,
+                      //   ),
+                      // ),
                     ],
                   ),
                 ),

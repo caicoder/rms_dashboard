@@ -184,15 +184,15 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
               padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                  foregroundColor: Colors.white,
+                  backgroundColor: Colors.transparent,
+                  foregroundColor: Colors.transparent,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
                   elevation: 2,
                 ),
                 icon: const Icon(Icons.videocam_rounded, size: 18),
-                label: const Text('查看监控', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text('查看监控', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.transparent)),
                 onPressed: () => _startMonitoring(robot),
               ),
             );
