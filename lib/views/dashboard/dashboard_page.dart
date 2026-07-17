@@ -10,6 +10,12 @@ import '../../models/robot_model.dart';
 import '../widgets/tv_focus_helper.dart';
 import 'widgets/robot_card.dart';
 import '../details/robot_detail_page.dart';
+import '../../controllers/auth_controller.dart';
+import '../../utils/http_util.dart';
+import '../../utils/api_util.dart';
+import '../../utils/sp_util.dart';
+import '../../utils/toast_util.dart';
+import '../../models/user_entity.dart';
 
 class DashboardPage extends StatelessWidget {
   DashboardPage({Key? key}) : super(key: key);
@@ -17,6 +23,102 @@ class DashboardPage extends StatelessWidget {
   final RobotController robotController = Get.put(RobotController(), permanent: true);
   final MqttController mqttController = Get.put(MqttController(), permanent: true);
   final TextEditingController _searchController = TextEditingController();
+
+  void _showLoginDialog(BuildContext context) {
+    final TextEditingController usernameController = TextEditingController();
+    final TextEditingController mimaContol = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('用户登录', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: usernameController,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: '用户名/手机号',
+                labelStyle: TextStyle(color: Colors.white54),
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.blueAccent)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: mimaContol,
+              obscureText: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: '密码',
+                labelStyle: TextStyle(color: Colors.white54),
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.blueAccent)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () {
+              final phone = usernameController.text.trim();
+              if (phone.isEmpty || mimaContol.text.isEmpty) {
+                ToastUtil.show("用户名或密码不能为空");
+                return;
+              }
+
+              ToastUtil.showLoading(message: "正在登录...");
+
+              HttpUtil.getInstance()?.post(
+                ApiUtil.pwdLogin,
+                {
+                  "tenantId": "000000",
+                  "rememberMe": false,
+                  'username': phone,
+                  'password': mimaContol.text,
+                  "grantType": "password",
+                  "clientId":"2ce32a9f2712aca5cca8defdd81b83ab",
+                },
+                (data) async {
+                  ToastUtil.dismiss();
+                  UserEntity userEntity = UserEntity.fromJson(data);
+                  await SPUtil.putLoginInfo(userEntity);
+
+                  final authController = Get.find<AuthController>();
+                  authController.isLoggedIn.value = true;
+
+                  Navigator.of(context).pop();
+                  ToastUtil.show("登录成功");
+                },
+                (error) {
+                  ToastUtil.dismiss();
+                  ToastUtil.show("登录失败: $error");
+                },
+              );
+            },
+            child: const Text('登录'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showAddRobotDialog(BuildContext context) {
     final TextEditingController snController = TextEditingController();
@@ -305,14 +407,17 @@ class DashboardPage extends StatelessWidget {
                     ),
                     SizedBox(width: isSmallScreen ? 8 : 16),
                     Expanded(
-                      child: Text(
-                        '骅羲监控系统',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 18 : 24,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
-                          color: Colors.white,
+                      child: GestureDetector(
+                        onTap: () => _showLoginDialog(context),
+                        child: Text(
+                          '骅羲监控系统',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 18 : 24,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),

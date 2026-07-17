@@ -10,6 +10,7 @@ import '../../models/map_data.dart';
 import '../../controllers/robot_controller.dart';
 import '../../controllers/mqtt_controller.dart';
 import '../widgets/tv_focus_helper.dart';
+import '../widgets/rtc_widget.dart';
 import 'flame/robot_map_game.dart';
 
 class RobotDetailPage extends StatefulWidget {
@@ -37,6 +38,57 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   final List<Map<String, dynamic>> _commandLog = [];
   final TextEditingController _customMsgController = TextEditingController();
   final FocusNode _mapFocusNode = FocusNode();
+
+  void _startMonitoring(RobotModel robot) {
+    // Generate userId from the last 5 digits of the epoch timestamp (in seconds)
+    final timeTag = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final userIdStr = timeTag.toString();
+    final lastFive = userIdStr.length >= 5
+        ? userIdStr.substring(userIdStr.length - 5)
+        : userIdStr.padLeft(5, '0');
+    final userId = int.tryParse(lastFive) ?? 0;
+
+    final payload = {
+      "cmdId": 66,
+      "timeTag": timeTag,
+      "body": {
+        "type": "0",
+        "subtype": null,
+        "params": {
+          "userId": userId
+        },
+        "target": ""
+      }
+    };
+
+    mqttController.publishCommand(robot.id, payload);
+    Get.snackbar(
+      '监控指令已下发',
+      '正在连接机器人，频道: ${robot.id}_channel',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.greenAccent.withOpacity(0.9),
+      colorText: Colors.black87,
+      duration: const Duration(seconds: 3),
+    );
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(24),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: RtcWidget(
+              channelId: "${robot.id}_channel",
+              robotId: robot.id,
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -123,6 +175,29 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
         }),
         backgroundColor: const Color(0xFF1E293B),
         elevation: 0,
+        actions: [
+          Obx(() {
+            final robotIndex = robotController.robots.indexWhere((r) => r.id == widget.robotId);
+            if (robotIndex < 0) return const SizedBox();
+            final robot = robotController.robots[robotIndex];
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  elevation: 2,
+                ),
+                icon: const Icon(Icons.videocam_rounded, size: 18),
+                label: const Text('查看监控', style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () => _startMonitoring(robot),
+              ),
+            );
+          }),
+        ],
       ),
       backgroundColor: const Color(0xFF0F172A),
       body: Obx(() {
