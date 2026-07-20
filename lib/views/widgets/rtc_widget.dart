@@ -1,18 +1,26 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shengwang_rtc_engine/agora_rtc_engine.dart';
-import '../../utils/http_util.dart';
-import '../../utils/api_util.dart';
-import '../../utils/toast_util.dart';
 
 class RtcWidget extends StatefulWidget {
   final String channelId;
   final String robotId;
+  final RtcEngine? engine;
+  final int? remoteUid;
+  final bool isReady;
+  final String statusMessage;
+  final VoidCallback? onClose;
+  final Function(Offset delta)? onDrag;
 
   const RtcWidget({
     Key? key,
     required this.channelId,
     required this.robotId,
+    this.engine,
+    this.remoteUid,
+    required this.isReady,
+    required this.statusMessage,
+    this.onClose,
+    this.onDrag,
   }) : super(key: key);
 
   @override
@@ -20,167 +28,20 @@ class RtcWidget extends StatefulWidget {
 }
 
 class _RtcWidgetState extends State<RtcWidget> {
-  static const String _appId = "afa2394f5e034fb4bd6a72593adbef57";
-  late final RtcEngine _engine;
-  
-  bool _isInit = false;
-  bool _joined = false;
-  int? _remoteUid;
   bool _isMuted = false;
-  String _statusMessage = "正在初始化音视频引擎...";
-  String _shengwangToken = "";
-
-  Future<String> getShengwangToken({required Function? callBack}) async {
-    Completer<String> completer = Completer<String>();
-    HttpUtil.getInstance()?.post(ApiUtil.shengWangToken, {
-      'roomName': widget.channelId,
-    }, (data) {
-      _shengwangToken = data ?? '';
-      callBack?.call();
-      completer.complete(_shengwangToken);
-    }, (msg, code) {
-      ToastUtil.show(msg.toString());
-      completer.completeError(msg);
-    });
-    return completer.future;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _initRtc();
-  }
-
-  Future<void> _initRtc() async {
-    try {
-      _engine = createAgoraRtcEngine();
-      await _engine.initialize(const RtcEngineContext(
-        appId: _appId,
-        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
-      ));
-
-      _engine.registerEventHandler(
-        RtcEngineEventHandler(
-          onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-            debugPrint("Successfully joined channel: ${connection.channelId}");
-            if (mounted) {
-              setState(() {
-                _joined = true;
-                _statusMessage = "已进入频道，正在等待机器人画面...";
-              });
-            }
-          },
-          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-            debugPrint("Remote user joined: $remoteUid");
-            if (mounted) {
-              setState(() {
-                _remoteUid = remoteUid;
-                _statusMessage = "已连接机器人";
-              });
-            }
-          },
-          onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
-            debugPrint("Remote user offline: $remoteUid");
-            if (mounted) {
-              setState(() {
-                _remoteUid = null;
-                _statusMessage = "机器人已断开连接";
-              });
-            }
-          },
-          onError: (ErrorCodeType err, String msg) {
-            debugPrint("RTC error: $err, msg: $msg");
-            if (mounted) {
-              setState(() {
-                _statusMessage = "连接出错: $msg";
-              });
-            }
-          },
-        ),
-      );
-
-      // Enable video support (not pushing, only pulling)
-      await _engine.enableVideo();
-
-      // Configure media options: pull-only stream, do not push local audio/video
-      const ChannelMediaOptions options = ChannelMediaOptions(
-        clientRoleType: ClientRoleType.clientRoleAudience,
-        autoSubscribeAudio: true,
-        autoSubscribeVideo: true,
-        publishCameraTrack: false,
-        publishMicrophoneTrack: false,
-      );
-
-      if (mounted) {
-        setState(() {
-          _statusMessage = "正在获取声网Token...";
-        });
-      }
-
-      String token = "";
-      try {
-        token = await getShengwangToken(callBack: () {
-          debugPrint("Shengwang Token fetched successfully");
-        });
-      } catch (e) {
-        if (mounted) {
-          setState(() {
-            _statusMessage = "获取Token失败: $e";
-          });
-        }
-        return;
-      }
-
-      if (mounted) {
-        setState(() {
-          _statusMessage = "正在加入频道 ${widget.channelId}...";
-          _isInit = true;
-        });
-      }
-
-      await _engine.joinChannel(
-        token: token,
-        channelId: widget.channelId,
-        uid: 0, // 0 lets engine generate a unique UID
-        options: options,
-      );
-    } catch (e) {
-      debugPrint("Error initializing RTC: $e");
-      if (mounted) {
-        setState(() {
-          _statusMessage = "初始化失败: $e";
-        });
-      }
-    }
-  }
 
   void _toggleMute() {
-    if (_remoteUid == null) return;
+    if (widget.remoteUid == null || widget.engine == null) return;
     setState(() {
       _isMuted = !_isMuted;
     });
-    _engine.muteRemoteAudioStream(uid: _remoteUid!, mute: _isMuted);
-  }
-
-  @override
-  void dispose() {
-    _leaveChannel();
-    super.dispose();
-  }
-
-  Future<void> _leaveChannel() async {
-    if (_isInit) {
-      try {
-        await _engine.leaveChannel();
-        await _engine.release();
-      } catch (e) {
-        debugPrint("Error releasing RTC engine: $e");
-      }
-    }
+    widget.engine!.muteRemoteAudioStream(uid: widget.remoteUid!, mute: _isMuted);
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool hasVideo = widget.isReady && widget.remoteUid != null && widget.engine != null;
+
     return Container(
       width: double.infinity,
       height: double.infinity,
@@ -191,11 +52,14 @@ class _RtcWidgetState extends State<RtcWidget> {
         children: [
           // Video player or loading state
           Center(
-            child: _remoteUid != null
+            child: hasVideo
                 ? AgoraVideoView(
                     controller: VideoViewController.remote(
-                      rtcEngine: _engine,
-                      canvas: VideoCanvas(uid: _remoteUid),
+                      rtcEngine: widget.engine!,
+                      canvas: VideoCanvas(
+                        uid: widget.remoteUid,
+                        renderMode: RenderModeType.renderModeFit,
+                      ),
                       connection: RtcConnection(channelId: widget.channelId),
                     ),
                   )
@@ -211,38 +75,46 @@ class _RtcWidgetState extends State<RtcWidget> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 // Channel ID details
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: _remoteUid != null ? Colors.greenAccent : Colors.amberAccent,
-                          shape: BoxShape.circle,
-                        ),
+                GestureDetector(
+                  onPanUpdate: widget.onDrag != null
+                      ? (details) => widget.onDrag!(details.delta)
+                      : null,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.move,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white10),
                       ),
-                      const SizedBox(width: 8),
-                      // Text(
-                      //   "监控频道: ${widget.channelId}",
-                      //   style: const TextStyle(
-                      //     color: Colors.white,
-                      //     fontSize: 13,
-                      //     fontWeight: FontWeight.w500,
-                      //   ),
-                      // ),
-                    ],
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: widget.remoteUid != null ? Colors.greenAccent : Colors.amberAccent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "监控: ${widget.robotId}",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 // Close button
                 IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: widget.onClose,
                   icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.black.withOpacity(0.5),
@@ -254,7 +126,7 @@ class _RtcWidgetState extends State<RtcWidget> {
           ),
 
           // Bottom status and action controls
-          if (_remoteUid != null)
+          if (widget.remoteUid != null)
             Positioned(
               bottom: 24,
               left: 0,
@@ -319,7 +191,7 @@ class _RtcWidgetState extends State<RtcWidget> {
         ),
         const SizedBox(height: 24),
         Text(
-          _statusMessage,
+          widget.statusMessage,
           style: const TextStyle(
             color: Colors.white70,
             fontSize: 15,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
@@ -9,9 +10,12 @@ import '../../models/robot_model.dart';
 import '../../models/map_data.dart';
 import '../../controllers/robot_controller.dart';
 import '../../controllers/mqtt_controller.dart';
+import '../../utils/http_util.dart';
+import '../../utils/api_util.dart';
+import '../../utils/toast_util.dart';
+import 'package:shengwang_rtc_engine/agora_rtc_engine.dart';
 import '../widgets/tv_focus_helper.dart';
-import '../widgets/rtc_widget.dart';
-import '../widgets/control_widget.dart';
+import '../widgets/monitoring_control_widget.dart';
 import 'flame/robot_map_game.dart';
 
 class RobotDetailPage extends StatefulWidget {
@@ -34,20 +38,175 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   String? _activePanel; // 'alarm', 'patrol', 'health', 'trajectory', 'command'
   bool _isPanelOpen = false;
 
+  // 监控与控制弹窗状态
+  bool _showMonitoringOrControl = false;
+  int _monitoringOrControlMode = 0; // 0 for monitoring, 1 for control
+  double _overlayLeft = 120.0;
+  double _overlayTop = 120.0;
+  int? _currentUserId;
+
+  int _getOrCreateUserId() {
+    if (_currentUserId == null) {
+      final timeTag = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final userIdStr = timeTag.toString();
+      final lastFive = userIdStr.length >= 5
+          ? userIdStr.substring(userIdStr.length - 5)
+          : userIdStr.padLeft(5, '0');
+      _currentUserId = int.tryParse(lastFive) ?? 0;
+    }
+    return _currentUserId!;
+  }
+
+  // 共享声网音视频引擎状态
+  static const String _sharedAppId = "afa2394f5e034fb4bd6a72593adbef57";
+  RtcEngine? _sharedEngine;
+  bool _isEngineJoined = false;
+  int? _remoteUid;
+  String _rtcStatusMessage = "正在初始化音视频引擎...";
+  String _shengwangToken = "";
+
   // 指令面板状态
   bool _isSendingCommand = false;
   final List<Map<String, dynamic>> _commandLog = [];
   final TextEditingController _customMsgController = TextEditingController();
   final FocusNode _mapFocusNode = FocusNode();
 
+  Future<String> getSharedShengwangToken(String channelId) async {
+    Completer<String> completer = Completer<String>();
+    HttpUtil.getInstance()?.post(ApiUtil.shengWangToken, {
+      'roomName': channelId,
+    }, (data) {
+      _shengwangToken = data ?? '';
+      completer.complete(_shengwangToken);
+    }, (msg, code) {
+      ToastUtil.show(msg.toString());
+      completer.completeError(msg ?? '获取Token失败');
+    });
+    return completer.future;
+  }
+
+  Future<void> _initSharedRtc(RobotModel robot) async {
+    if (_isEngineJoined) return;
+    try {
+      final String channelId = "${robot.id}_channel";
+      setState(() {
+        _rtcStatusMessage = "正在获取安全令牌 (Token)...";
+        _isEngineJoined = true;
+      });
+
+      String token = "";
+      try {
+        token = await getSharedShengwangToken(channelId);
+      } catch (e) {
+        setState(() {
+          _rtcStatusMessage = "获取Token失败: $e";
+          _isEngineJoined = false;
+        });
+        return;
+      }
+
+      setState(() {
+        _rtcStatusMessage = "正在初始化 RTC 引擎...";
+      });
+
+      _sharedEngine = createAgoraRtcEngine();
+      await _sharedEngine!.initialize(const RtcEngineContext(
+        appId: _sharedAppId,
+        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+      ));
+
+      _sharedEngine!.registerEventHandler(
+        RtcEngineEventHandler(
+          onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+            debugPrint("Successfully joined shared RTC channel: ${connection.channelId}");
+            if (mounted) {
+              setState(() {
+                _rtcStatusMessage = "已进入频道，正在等待机器人画面...";
+              });
+            }
+          },
+          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+            debugPrint("Remote user joined shared channel: $remoteUid");
+            if (mounted) {
+              setState(() {
+                _remoteUid = remoteUid;
+                _rtcStatusMessage = "已连接机器人";
+              });
+            }
+          },
+          onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
+            debugPrint("Remote user offline: $remoteUid");
+            if (mounted) {
+              setState(() {
+                _remoteUid = null;
+                _rtcStatusMessage = "机器人已断开连接";
+              });
+            }
+          },
+          onError: (ErrorCodeType err, String msg) {
+            debugPrint("RTC error: $err, msg: $msg");
+            if (mounted) {
+              setState(() {
+                _rtcStatusMessage = "RTC 连接出错: $msg";
+              });
+            }
+          },
+        ),
+      );
+
+      await _sharedEngine!.enableVideo();
+      await _sharedEngine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+
+      // Join RTC channel as broadcaster but do not publish camera or microphone tracks
+      await _sharedEngine!.joinChannel(
+        token: token,
+        channelId: channelId,
+        uid: 0,
+        options: const ChannelMediaOptions(
+          clientRoleType: ClientRoleType.clientRoleBroadcaster,
+          autoSubscribeAudio: true,
+          autoSubscribeVideo: true,
+          publishCameraTrack: false,
+          publishMicrophoneTrack: false,
+        ),
+      );
+    } catch (e) {
+      debugPrint("Error initializing shared RTC: $e");
+      if (mounted) {
+        setState(() {
+          _rtcStatusMessage = "初始化失败: $e";
+          _isEngineJoined = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _cleanupSharedRtc() async {
+    if (_sharedEngine != null) {
+      try {
+        await _sharedEngine!.leaveChannel();
+        await _sharedEngine!.release();
+      } catch (e) {
+        debugPrint("Error releasing RTC engine: $e");
+      }
+      _sharedEngine = null;
+    }
+    if (mounted) {
+      setState(() {
+        _isEngineJoined = false;
+        _remoteUid = null;
+        _rtcStatusMessage = "正在初始化音视频引擎...";
+      });
+    } else {
+      _isEngineJoined = false;
+      _remoteUid = null;
+      _rtcStatusMessage = "正在初始化音视频引擎...";
+    }
+  }
+
   void _startMonitoring(RobotModel robot) {
-    // Generate userId from the last 5 digits of the epoch timestamp (in seconds)
+    final userId = _getOrCreateUserId();
     final timeTag = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final userIdStr = timeTag.toString();
-    final lastFive = userIdStr.length >= 5
-        ? userIdStr.substring(userIdStr.length - 5)
-        : userIdStr.padLeft(5, '0');
-    final userId = int.tryParse(lastFive) ?? 0;
 
     final payload = {
       "cmdId": 66,
@@ -72,39 +231,25 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
       duration: const Duration(seconds: 3),
     );
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.all(24),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: RtcWidget(
-              channelId: "${robot.id}_channel",
-              robotId: robot.id,
-            ),
-          ),
-        );
-      },
-    );
+    if (!_isEngineJoined) {
+      _initSharedRtc(robot);
+    }
+
+    setState(() {
+      _monitoringOrControlMode = 0;
+      _showMonitoringOrControl = true;
+    });
   }
 
   void _startRemoteControl(RobotModel robot) {
-    // Generate userId from the last 5 digits of the epoch timestamp (in seconds)
+    final userId = _getOrCreateUserId();
     final timeTag = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final userIdStr = timeTag.toString();
-    final lastFive = userIdStr.length >= 5
-        ? userIdStr.substring(userIdStr.length - 5)
-        : userIdStr.padLeft(5, '0');
-    final userId = int.tryParse(lastFive) ?? 0;
 
     final payload = {
       "cmdId": 66,
       "timeTag": timeTag,
       "body": {
-        "type": "7", // 1 is screen control / screen sharing
+        "type": "7",
         "subtype": null,
         "params": {
           "userId": userId
@@ -116,30 +261,21 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     mqttController.publishCommand(robot.id, payload);
     Get.snackbar(
       '远程控制指令已下发',
-      '正在连接机器人屏幕，频道: ${robot.id}_control',
+      '正在连接机器人屏幕，频道: ${robot.id}_channel',
       snackPosition: SnackPosition.BOTTOM,
       backgroundColor: Colors.blueAccent.withOpacity(0.9),
       colorText: Colors.white,
       duration: const Duration(seconds: 3),
     );
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.all(24),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: ControlWidget(
-              channelId: "${robot.id}_control",
-              robotId: robot.id,
-            ),
-          ),
-        );
-      },
-    );
+    if (!_isEngineJoined) {
+      _initSharedRtc(robot);
+    }
+
+    setState(() {
+      _monitoringOrControlMode = 1;
+      _showMonitoringOrControl = true;
+    });
   }
 
   @override
@@ -193,6 +329,7 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
 
   @override
   void dispose() {
+    _cleanupSharedRtc();
     // 显式释放 C++ 层的图片图形内存，防止不断进出详情页导致 OOM
     _game?.mapData.image.dispose();
     _customMsgController.dispose();
@@ -203,7 +340,9 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: _showMonitoringOrControl
+          ? null
+          : AppBar(
         title: Obx(() {
           final robotIndex = robotController.robots.indexWhere((r) => r.id == widget.robotId);
           if (robotIndex < 0) {
@@ -339,6 +478,30 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
                 right: 0,
                 child: Center(
                   child: _buildMapControls(),
+                ),
+              ),
+
+            // 6. 监控与控制悬浮窗 (全屏显示)
+            if (_showMonitoringOrControl)
+              Positioned.fill(
+                child: Container(
+                  color: const Color(0xFF0F172A),
+                  child: MonitoringControlWidget(
+                    channelId: "${robot.id}_channel",
+                    robotId: robot.id,
+                    engine: _sharedEngine,
+                    remoteUid: _remoteUid,
+                    isReady: _sharedEngine != null,
+                    statusMessage: _rtcStatusMessage,
+                    userId: _getOrCreateUserId(),
+                    initialMode: _monitoringOrControlMode,
+                    onClose: () {
+                      setState(() {
+                        _showMonitoringOrControl = false;
+                      });
+                      _cleanupSharedRtc();
+                    },
+                  ),
                 ),
               ),
           ],
