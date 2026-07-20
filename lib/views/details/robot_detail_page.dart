@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:rms_dashboard/utils/huaxi_util.dart';
 import '../../models/robot_model.dart';
 import '../../models/map_data.dart';
 import '../../controllers/robot_controller.dart';
 import '../../controllers/mqtt_controller.dart';
-import '../../controllers/auth_controller.dart';
 import '../../utils/http_util.dart';
 import '../../utils/api_util.dart';
 import '../../utils/toast_util.dart';
@@ -369,13 +369,12 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
         elevation: 0,
         actions: [
           Obx(() {
-            final authController = Get.find<AuthController>();
-            if (!authController.isLoggedIn.value) return const SizedBox();
+
 
             final robotIndex = robotController.robots.indexWhere((r) => r.id == widget.robotId);
             if (robotIndex < 0) return const SizedBox();
             final robot = robotController.robots[robotIndex];
-            return Padding(
+            return   !HuaxiUtil.isLogn?SizedBox():Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

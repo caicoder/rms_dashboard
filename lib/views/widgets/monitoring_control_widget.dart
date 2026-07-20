@@ -58,8 +58,8 @@ class _MonitoringControlWidgetState extends State<MonitoringControlWidget> {
     }
 
     _rtcEventHandler = RtcEngineEventHandler(
-      onRemoteVideoSizeChanged: (RtcConnection connection, int remoteUid, int width, int height, int rotation) {
-        if (remoteUid == widget.remoteUid) {
+      onVideoSizeChanged: (RtcConnection connection, VideoSourceType sourceType, int uid, int width, int height, int rotation) {
+        if (uid == widget.remoteUid) {
           debugPrint("MonitoringControlWidget Remote video size changed: ${width}x${height}");
           if (mounted) {
             setState(() {

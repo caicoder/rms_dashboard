@@ -4,6 +4,7 @@ import 'package:mqtt_client/mqtt_client.dart';
 import 'dart:ui';
 import 'dart:convert';
 import 'package:intl/intl.dart';
+import 'package:rms_dashboard/utils/huaxi_util.dart';
 import '../../controllers/robot_controller.dart';
 import '../../controllers/mqtt_controller.dart';
 import '../../models/robot_model.dart';
@@ -103,6 +104,7 @@ class DashboardPage extends StatelessWidget {
 
                   final authController = Get.find<AuthController>();
                   authController.isLoggedIn.value = true;
+                  HuaxiUtil.isLogn = true;
 
                   Navigator.of(context).pop();
                   ToastUtil.show("登录成功");
