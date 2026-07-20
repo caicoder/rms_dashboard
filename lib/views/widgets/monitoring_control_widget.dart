@@ -41,6 +41,11 @@ class _MonitoringControlWidgetState extends State<MonitoringControlWidget> {
   bool _isMuted = false;
   final GlobalKey _viewportKey = GlobalKey();
 
+  // Screen resolution dimensions of the remote video stream
+  int _videoWidth = 1280;
+  int _videoHeight = 720;
+  late final RtcEngineEventHandler _rtcEventHandler;
+
   @override
   void initState() {
     super.initState();
@@ -51,6 +56,36 @@ class _MonitoringControlWidgetState extends State<MonitoringControlWidget> {
     } catch (e) {
       debugPrint("Error finding MqttController: $e");
     }
+
+    _rtcEventHandler = RtcEngineEventHandler(
+      onRemoteVideoSizeChanged: (RtcConnection connection, int remoteUid, int width, int height, int rotation) {
+        if (remoteUid == widget.remoteUid) {
+          debugPrint("MonitoringControlWidget Remote video size changed: ${width}x${height}");
+          if (mounted) {
+            setState(() {
+              _videoWidth = width;
+              _videoHeight = height;
+            });
+          }
+        }
+      },
+    );
+
+    if (widget.engine != null) {
+      widget.engine!.registerEventHandler(_rtcEventHandler);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (widget.engine != null) {
+      try {
+        widget.engine!.unregisterEventHandler(_rtcEventHandler);
+      } catch (e) {
+        debugPrint("Error unregistering event handler in MonitoringControlWidget: $e");
+      }
+    }
+    super.dispose();
   }
 
   void _sendControlMessage(String action, Offset localPosition) {
@@ -59,13 +94,41 @@ class _MonitoringControlWidgetState extends State<MonitoringControlWidget> {
     final RenderBox? renderBox = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
 
-    final double width = renderBox.size.width;
-    final double height = renderBox.size.height;
+    final double containerWidth = renderBox.size.width;
+    final double containerHeight = renderBox.size.height;
 
-    final double normalizedX = localPosition.dx / width;
-    final double normalizedY = localPosition.dy / height;
+    // Calculate the actual scaled dimensions and offsets of the video stream under RenderModeType.renderModeFit
+    double videoWidth = containerWidth;
+    double videoHeight = containerHeight;
+    double videoLeft = 0;
+    double videoTop = 0;
 
-    // Safety checks
+    if (_videoWidth > 0 && _videoHeight > 0) {
+      final double videoAspectRatio = _videoWidth.toDouble() / _videoHeight.toDouble();
+      final double containerAspectRatio = containerWidth / containerHeight;
+
+      if (containerAspectRatio > videoAspectRatio) {
+        // Pillarboxing (black bars on left/right sides)
+        videoHeight = containerHeight;
+        videoWidth = containerHeight * videoAspectRatio;
+        videoLeft = (containerWidth - videoWidth) / 2;
+      } else {
+        // Letterboxing (black bars on top/bottom sides)
+        videoWidth = containerWidth;
+        videoHeight = containerWidth / videoAspectRatio;
+        videoTop = (containerHeight - videoHeight) / 2;
+      }
+    }
+
+    // Map pointer coordinate relative to the actual video boundary
+    final double relativeX = localPosition.dx - videoLeft;
+    final double relativeY = localPosition.dy - videoTop;
+
+    // Normalize coordinates relative to the video dimensions
+    final double normalizedX = relativeX / videoWidth;
+    final double normalizedY = relativeY / videoHeight;
+
+    // Ignore taps/clicks falling outside the actual video content region (black bars)
     if (normalizedX < 0 || normalizedX > 1 || normalizedY < 0 || normalizedY > 1) return;
 
     final Map<String, dynamic> body = {

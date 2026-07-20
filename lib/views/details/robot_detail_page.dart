@@ -10,6 +10,7 @@ import '../../models/robot_model.dart';
 import '../../models/map_data.dart';
 import '../../controllers/robot_controller.dart';
 import '../../controllers/mqtt_controller.dart';
+import '../../controllers/auth_controller.dart';
 import '../../utils/http_util.dart';
 import '../../utils/api_util.dart';
 import '../../utils/toast_util.dart';
@@ -368,6 +369,9 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
         elevation: 0,
         actions: [
           Obx(() {
+            final authController = Get.find<AuthController>();
+            if (!authController.isLoggedIn.value) return const SizedBox();
+
             final robotIndex = robotController.robots.indexWhere((r) => r.id == widget.robotId);
             if (robotIndex < 0) return const SizedBox();
             final robot = robotController.robots[robotIndex];
