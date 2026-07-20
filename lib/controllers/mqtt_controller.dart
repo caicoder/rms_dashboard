@@ -116,7 +116,7 @@ class MqttController extends GetxController with WidgetsBindingObserver {
       client!.port = port;
     } else {
       client = MqttServerClient.withPort(serverUri, clientId, port);
-      client!.logging(on: true);
+      client!.logging(on: false);
       client!.keepAlivePeriod = 60;
     }
 
