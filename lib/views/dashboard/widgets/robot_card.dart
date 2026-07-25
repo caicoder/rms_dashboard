@@ -168,15 +168,19 @@ class RobotCard extends StatelessWidget {
                       ),
                       child: Column(
                         children: [
+                          if (robot.upSsid.isNotEmpty || robot.downSsid.isNotEmpty) ...[
+                            _buildSsidBadge(robot.upSsid, robot.downSsid),
+                            const SizedBox(height: 6),
+                          ],
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               _buildPositionStat('Axis X', robot.positionX, themeColor),
-                              Container(width: 1, height: 20, color: Colors.white.withOpacity(0.1)),
+                              Container(width: 1, height: 10, margin: const EdgeInsets.symmetric(horizontal: 8), color: Colors.white.withOpacity(0.2)),
                               _buildPositionStat('Axis Y', robot.positionY, themeColor),
                             ],
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Row(
                             children: [
                               TvFocusHelper(
@@ -312,20 +316,87 @@ class RobotCard extends StatelessWidget {
     );
   }
 
+  Widget _buildSsidBadge(String? upSsid, String? downSsid) {
+    final hasUp = upSsid != null && upSsid.trim().isNotEmpty;
+    final hasDown = downSsid != null && downSsid.trim().isNotEmpty;
+
+    if (!hasUp && !hasDown) {
+      return const SizedBox.shrink();
+    }
+
+    bool isDifferent = hasUp && hasDown && (upSsid != downSsid);
+    Color bgColor = isDifferent ? const Color(0xFFEF4444) : const Color(0xFF10B981);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: bgColor.withOpacity(0.25),
+        border: Border.all(color: bgColor.withOpacity(0.7), width: 1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (hasUp)
+            Row(
+              children: [
+                Icon(Icons.wifi_rounded, size: 12, color: bgColor),
+                const SizedBox(width: 4),
+                Text(
+                  'upSsid: ',
+                  style: TextStyle(color: bgColor.withOpacity(0.8), fontSize: 10, fontWeight: FontWeight.w600),
+                ),
+                Expanded(
+                  child: Text(
+                    upSsid!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: bgColor, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          if (hasUp && hasDown) const SizedBox(height: 3),
+          if (hasDown)
+            Row(
+              children: [
+                Icon(Icons.wifi_rounded, size: 12, color: bgColor),
+                const SizedBox(width: 4),
+                Text(
+                  'downSsid: ',
+                  style: TextStyle(color: bgColor.withOpacity(0.8), fontSize: 10, fontWeight: FontWeight.w600),
+                ),
+                Expanded(
+                  child: Text(
+                    downSsid!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: bgColor, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPositionStat(String label, double value, Color themeColor) {
-    return Column(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          label,
-          style: const TextStyle(color: Colors.white54, fontSize: 9, letterSpacing: 0.5),
+          '$label: ',
+          style: const TextStyle(color: Colors.white54, fontSize: 10),
         ),
-        const SizedBox(height: 2),
         Text(
           value.toStringAsFixed(2),
           style: const TextStyle(
-            color: Colors.white, 
-            fontSize: 14, 
-            fontWeight: FontWeight.w700,
+            color: Colors.white70, 
+            fontSize: 10, 
+            fontWeight: FontWeight.w600,
             fontFeatures: [FontFeature.tabularFigures()],
           ),
         ),
@@ -345,7 +416,14 @@ class RobotCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text('$label: ', style: const TextStyle(color: Colors.white54, fontSize: 10)),
-          Text(value, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+            ),
+          ),
         ],
       ),
     );

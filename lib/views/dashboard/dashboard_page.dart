@@ -173,10 +173,14 @@ class DashboardPage extends StatelessWidget {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
             onPressed: () {
-              if (snController.text.trim().isNotEmpty) {
-                robotController.addRobotBySn(snController.text.trim(), orgController.text.trim());
-                Navigator.pop(context);
+              final sn = snController.text.trim();
+              final org = orgController.text.trim();
+              if (sn.isEmpty) {
+                Get.snackbar('提示', '请输入设备 SN 码', snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.orangeAccent, colorText: Colors.white);
+                return;
               }
+              robotController.addRobotBySn(sn, org);
+              Navigator.pop(context);
             },
             child: const Text('添加 (Add)', style: TextStyle(color: Colors.white)),
           ),
@@ -330,7 +334,7 @@ class DashboardPage extends StatelessWidget {
                     Obx(() {
                       final robots = robotController.filteredRobots;
                       if (robots.isEmpty) {
-                        return _buildEmptyState(isSearch: robotController.searchQuery.value.isNotEmpty);
+                        return _buildEmptyState(isSearch: robotController.searchQuery.value.isNotEmpty || robotController.selectedTypeFilter.value != -1);
                       }
                       
                       return Padding(
@@ -534,44 +538,196 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
+  String _getTypeName(int type) {
+    switch (type) {
+      case -1: return '全部';
+      case -4: return '在线设备';
+      case -2: return '急停触发';
+      case -3: return '设备离线';
+      case 0: return '空闲待机';
+      case 1: return '回去充电';
+      case 3: return '巡逻任务';
+      case 7: return '代送任务';
+      case 109: return '前往迎宾点';
+      case 110: return '前往传话';
+      case 111: return '前往拿取';
+      case 112: return '前往告警任务';
+      case 113: return '大喇叭任务';
+      case 114: return '进行导览任务';
+      case 115: return '前往目标点';
+      case 116: return '带路';
+      default: return '类型 $type';
+    }
+  }
+
   Widget _buildSearchBar(BuildContext context) {
     return Obx(() {
       final query = robotController.searchQuery.value;
+      final selectedType = robotController.selectedTypeFilter.value;
+      final allRobots = robotController.robots;
+
       if (query.isEmpty && _searchController.text.isNotEmpty) {
         _searchController.text = '';
       }
+
+      // 固定放在最上面：全部 (-1)、在线设备 (-4)、急停触发 (-2)、设备离线 (-3)
+      List<int> topFilterCodes = [-1, -4, -2, -3];
+
+      Set<int> typeSet = {0, 1, 3, 7, 109, 110, 111, 112, 113, 114, 115, 116};
+      for (var r in allRobots) {
+        typeSet.add(r.type);
+      }
+      List<int> taskTypes = typeSet.toList()..sort();
+      List<int> sortedTypes = [...topFilterCodes, ...taskTypes];
+
+      int countForType(int code) {
+        if (code == -1) return allRobots.length;
+        if (code == -4) return allRobots.where((r) => !r.isOffline).length;
+        if (code == -2) return allRobots.where((r) => r.eStop).length;
+        if (code == -3) return allRobots.where((r) => r.isOffline).length;
+        return allRobots.where((r) => r.type == code).length;
+      }
+
+      String selectedTypeName = _getTypeName(selectedType);
+      int selectedTypeCount = countForType(selectedType);
+
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
         child: Center(
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 500),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E293B).withOpacity(0.5),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
-            ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (val) {
-                robotController.searchQuery.value = val;
-              },
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: '搜索 SN 或机构名称...',
-                hintStyle: const TextStyle(color: Colors.white30, fontSize: 14),
-                prefixIcon: const Icon(Icons.search, color: Colors.white54),
-                suffixIcon: query.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, color: Colors.white54),
-                        onPressed: () {
-                          _searchController.clear();
-                          robotController.searchQuery.value = '';
-                        },
-                      )
-                    : null,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              ),
+            constraints: const BoxConstraints(maxWidth: 750),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B).withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (val) {
+                        robotController.searchQuery.value = val;
+                        robotController.currentPage.value = 0;
+                      },
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: '搜索 SN 或机构名称...',
+                        hintStyle: const TextStyle(color: Colors.white30, fontSize: 14),
+                        prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                        suffixIcon: query.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, color: Colors.white54),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  robotController.searchQuery.value = '';
+                                  robotController.currentPage.value = 0;
+                                },
+                              )
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                PopupMenuButton<int>(
+                  onSelected: (int type) {
+                    robotController.selectedTypeFilter.value = type;
+                    robotController.currentPage.value = 0;
+                  },
+                  color: const Color(0xFF1E293B),
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  itemBuilder: (context) {
+                    return sortedTypes.map((t) {
+                      int count = countForType(t);
+                      bool isSelected = t == selectedType;
+                      IconData iconData = isSelected 
+                          ? Icons.check_circle_rounded 
+                          : (t == -4 ? Icons.sensors_rounded : (t == -2 ? Icons.stop_circle_rounded : (t == -3 ? Icons.cloud_off_rounded : Icons.radio_button_unchecked_rounded)));
+                      Color iconColor = isSelected 
+                          ? const Color(0xFF3B82F6) 
+                          : (t == -4 ? const Color(0xFF10B981) : (t == -2 ? const Color(0xFFEF4444) : (t == -3 ? Colors.grey : Colors.white38)));
+
+                      return PopupMenuItem<int>(
+                        value: t,
+                        child: Row(
+                          children: [
+                            Icon(
+                              iconData,
+                              size: 16,
+                              color: iconColor,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _getTypeName(t),
+                                style: TextStyle(
+                                  color: isSelected ? Colors.white : Colors.white70,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isSelected ? const Color(0xFF3B82F6) : Colors.white10,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '$count',
+                                style: TextStyle(
+                                  color: isSelected ? Colors.white : Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: selectedType != -1 
+                          ? const Color(0xFF3B82F6).withOpacity(0.3)
+                          : const Color(0xFF1E293B).withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(
+                        color: selectedType != -1 ? const Color(0xFF3B82F6) : Colors.white.withOpacity(0.1),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.filter_list_rounded,
+                          size: 18,
+                          color: selectedType != -1 ? const Color(0xFF60A5FA) : Colors.white70,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          selectedType == -1 ? '类型筛选 ($selectedTypeCount)' : '$selectedTypeName ($selectedTypeCount)',
+                          style: TextStyle(
+                            color: selectedType != -1 ? Colors.white : Colors.white70,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

@@ -71,9 +71,13 @@ class PatrolSession {
 
   factory PatrolSession.fromJson(Map<String, dynamic> json) => PatrolSession(
     recordId: json['recordId'] ?? '',
-    startTime: DateTime.parse(json['startTime']),
+    startTime: json['startTime'] != null ? DateTime.parse(json['startTime']) : DateTime.now(),
     endTime: json['endTime'] != null ? DateTime.parse(json['endTime']) : null,
-    events: (json['events'] ?? json['nodes'] as List<dynamic>?)?.map((e) => PatrolEventLog.fromJson(e)).toList() ?? [],
+    events: (json['events'] is List)
+        ? (json['events'] as List).map((e) => PatrolEventLog.fromJson(e)).toList()
+        : ((json['nodes'] is List)
+            ? (json['nodes'] as List).map((e) => PatrolEventLog.fromJson(e)).toList()
+            : []),
     status: json['status'],
     result: json['result'],
     reason: json['reason'],
@@ -212,6 +216,8 @@ class RobotModel {
   int status;
   bool eStop;
   int wifi88Status;
+  String upSsid;
+  String downSsid;
   List<int> taskList;
   int soc;
   int socStaus;
@@ -269,6 +275,8 @@ class RobotModel {
     this.status = 1,
     this.eStop = false,
     this.wifi88Status = 0,
+    this.upSsid = '',
+    this.downSsid = '',
     List<int>? taskList,
     this.soc = 0,
     this.socStaus = 0,
@@ -298,6 +306,8 @@ class RobotModel {
     'status': status,
     'eStop': eStop,
     'wifi88Status': wifi88Status,
+    'upSsid': upSsid,
+    'downSsid': downSsid,
     'taskList': taskList,
     'soc': soc,
     'socStaus': socStaus,
@@ -321,6 +331,8 @@ class RobotModel {
     status: json['status'] ?? 1,
     eStop: json['eStop'] ?? false,
     wifi88Status: json['wifi88Status'] ?? 0,
+    upSsid: json['upSsid']?.toString() ?? '',
+    downSsid: json['downSsid']?.toString() ?? '',
     taskList: List<int>.from(json['taskList'] ?? [0,0,0,0,0]),
     soc: json['soc'] ?? 0,
     socStaus: json['socStaus'] ?? 0,

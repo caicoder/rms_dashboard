@@ -740,7 +740,14 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
                     'cmdId': 8,
                     'version': 2,
                     'timeTag': DateTime.now().millisecondsSinceEpoch,
-                    'body': {'type': 3, 'subtype': 1, 'params': {'patrolId': '1'}},
+                    'body': {
+                      'type': 3,
+                      'subtype': 1,
+                      'params': {
+                        'patrolId': DateTime.now().millisecondsSinceEpoch.toString().substring(0, 11),
+                        'featureToggle': 1,
+                      },
+                    },
                   }),
                 ),
                 _CommandItem(
@@ -792,6 +799,30 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
                     'version': 2,
                     'timeTag': DateTime.now().millisecondsSinceEpoch,
                     'body': {'type': '2'},
+                  }),
+                ),
+                _CommandItem(
+                  icon: Icons.restart_alt_rounded,
+                  title: '重启 下位机',
+                  subtitle: '通过 SSH 重启下位机',
+                  color: Colors.indigoAccent,
+                  onTap: () => _sendCommandWithConfirmation(robot.id, '下位机重启', {
+                    'cmdId': 9,
+                    'version': 2,
+                    'timeTag': DateTime.now().millisecondsSinceEpoch,
+                    'body': {'type': '4'},
+                  }),
+                ),
+                _CommandItem(
+                  icon: Icons.restart_alt_rounded,
+                  title: '下位机触发重定位',
+                  subtitle: '通过 ros  下位机重定位',
+                  color: Colors.indigoAccent,
+                  onTap: () => _sendCommandWithConfirmation(robot.id, '下位机重定位', {
+                    'cmdId': 9,
+                    'version': 2,
+                    'timeTag': DateTime.now().millisecondsSinceEpoch,
+                    'body': {'type': '3'},
                   }),
                 ),
               ]),
@@ -980,6 +1011,77 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
       colorText: Colors.white,
       duration: const Duration(seconds: 3),
     );
+  }
+
+  Future<void> _sendCommandWithConfirmation(
+    String sn,
+    String name,
+    Map<String, dynamic> payload, {
+    String warningMessage = '非必要时候请勿触发，导致机器任何问题后果自负',
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.amberAccent.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.warning_amber_rounded, color: Colors.amberAccent, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Text('高风险操作提示', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+              ),
+              child: Text(
+                warningMessage,
+                style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.w600, height: 1.4),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '确定要下发「$name」指令吗？',
+              style: const TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('确定发送', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _sendCommand(sn, name, payload);
+    }
   }
 
   void _showDateLogDialog(String sn) {

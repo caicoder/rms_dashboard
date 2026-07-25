@@ -14,6 +14,7 @@ class RobotController extends GetxController {
   var activeAlarms = <ActiveAlarmItem>[].obs;
   
   var searchQuery = ''.obs; // 搜索关键字
+  var selectedTypeFilter = (-1).obs; // -1 表示全部，>=0 表示按 type 筛选
   var isAlarmsCollapsed = false.obs; // 告警面板是否收起
   
   final AudioPlayer _audioPlayer = AudioPlayer(); // 音频播放器
@@ -25,11 +26,22 @@ class RobotController extends GetxController {
   int get totalPages => (filteredRobots.isEmpty) ? 1 : (filteredRobots.length / itemsPerPage).ceil();
 
   List<RobotModel> get filteredRobots {
+    List<RobotModel> list = robots;
+    if (selectedTypeFilter.value == -4) {
+      list = list.where((r) => !r.isOffline).toList();
+    } else if (selectedTypeFilter.value == -2) {
+      list = list.where((r) => r.eStop).toList();
+    } else if (selectedTypeFilter.value == -3) {
+      list = list.where((r) => r.isOffline).toList();
+    } else if (selectedTypeFilter.value != -1) {
+      list = list.where((r) => r.type == selectedTypeFilter.value).toList();
+    }
+    
     if (searchQuery.value.trim().isEmpty) {
-      return robots;
+      return list;
     }
     final query = searchQuery.value.trim().toLowerCase();
-    return robots.where((r) {
+    return list.where((r) {
       return r.id.toLowerCase().contains(query) ||
              r.organization.toLowerCase().contains(query);
     }).toList();
@@ -122,11 +134,16 @@ class RobotController extends GetxController {
     _deletedRobots.remove(sn);
     if (_robotsMap.containsKey(sn)) {
       var existing = _robotsMap[sn]!;
-      if (organization.isNotEmpty && (existing.name == '设备 $sn' || existing.name == '自动发现')) {
-         existing.name = organization;
+      if (organization.isNotEmpty) {
          existing.organization = organization;
+         if (existing.name.startsWith('设备 ') || existing.name == '自动发现' || existing.name.isEmpty) {
+           existing.name = organization;
+         }
          saveRobots();
          robots.refresh();
+         if (showSnackbar) {
+           Get.snackbar('提示', '设备 $sn 机构已更新为 $organization', snackPosition: SnackPosition.BOTTOM);
+         }
       } else if (showSnackbar) {
         Get.snackbar('提示', '设备 $sn 已经存在', snackPosition: SnackPosition.BOTTOM);
       }
@@ -200,6 +217,12 @@ class RobotController extends GetxController {
     robot.status = int.tryParse(data['status']?.toString() ?? '1') ?? 1;
     robot.eStop = data['eStop'] ?? false;
     robot.wifi88Status = int.tryParse(data['wifi88Status']?.toString() ?? '0') ?? 0;
+    if (data.containsKey('upSsid')) {
+      robot.upSsid = data['upSsid']?.toString() ?? '';
+    }
+    if (data.containsKey('downSsid')) {
+      robot.downSsid = data['downSsid']?.toString() ?? '';
+    }
     
     if (data['taskList'] is List) {
       robot.taskList = List<int>.from(data['taskList']);
@@ -480,11 +503,7 @@ class RobotController extends GetxController {
       if (a.isFavorite && !b.isFavorite) return -1;
       if (!a.isFavorite && b.isFavorite) return 1;
 
-      // 1. 急停排在最前面 (eStop == true)
-      if (a.eStop && !b.eStop) return -1;
-      if (!a.eStop && b.eStop) return 1;
-
-      // 4. 离线状态排最后 (isOffline == true)
+      // 离线状态排最后 (isOffline == true)
       bool aOffline = a.isOffline;
       bool bOffline = b.isOffline;
       
