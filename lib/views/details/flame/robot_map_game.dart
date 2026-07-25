@@ -51,6 +51,7 @@ class TrajectoryLayerComponent extends PositionComponent with TapCallbacks {
   final RobotModel robot;
   final MapData mapData;
   final void Function(TrajectoryPoint)? onPointClicked;
+  List<TrajectoryPoint>? highlightedTrajectory;
 
   TrajectoryLayerComponent(this.robot, this.mapData, {this.onPointClicked}) {
     size = Vector2(mapData.config.width.toDouble(), mapData.config.height.toDouble());
@@ -69,7 +70,11 @@ class TrajectoryLayerComponent extends PositionComponent with TapCallbacks {
     TrajectoryPoint? closestPoint;
     double minDistance = 15.0; // 点击半径阈值
 
-    for (var point in robot.trajectory) {
+    final targetList = (highlightedTrajectory != null && highlightedTrajectory!.isNotEmpty)
+        ? highlightedTrajectory!
+        : robot.trajectory;
+
+    for (var point in targetList) {
       final px = mapData.toPixel(point.x, point.y);
       final dx = px.dx - tapX;
       final dy = px.dy - tapY;
@@ -89,33 +94,82 @@ class TrajectoryLayerComponent extends PositionComponent with TapCallbacks {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
-    if (robot.trajectory.length < 2) return;
 
-    final paint = Paint()
-      ..color = Colors.greenAccent
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
+    // 1. 绘制完整基础轨迹
+    if (robot.trajectory.length >= 2) {
+      final paint = Paint()
+        ..color = (highlightedTrajectory != null && highlightedTrajectory!.isNotEmpty)
+            ? Colors.greenAccent.withOpacity(0.3)
+            : Colors.greenAccent
+        ..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke;
 
-    final path = Path();
-    bool isFirst = true;
+      final path = Path();
+      bool isFirst = true;
 
-    for (var point in robot.trajectory) {
-      final px = mapData.toPixel(point.x, point.y);
-      if (isFirst) {
-        path.moveTo(px.dx, px.dy);
-        isFirst = false;
-      } else {
-        path.lineTo(px.dx, px.dy);
+      for (var point in robot.trajectory) {
+        final px = mapData.toPixel(point.x, point.y);
+        if (isFirst) {
+          path.moveTo(px.dx, px.dy);
+          isFirst = false;
+        } else {
+          path.lineTo(px.dx, px.dy);
+        }
+      }
+      
+      canvas.drawPath(path, paint);
+      
+      if (highlightedTrajectory == null || highlightedTrajectory!.isEmpty) {
+        final dotPaint = Paint()..color = Colors.redAccent;
+        for (var point in robot.trajectory) {
+          final px = mapData.toPixel(point.x, point.y);
+          canvas.drawCircle(Offset(px.dx, px.dy), 2.0, dotPaint);
+        }
       }
     }
-    
-    canvas.drawPath(path, paint);
-    
-    // Draw dots
-    final dotPaint = Paint()..color = Colors.redAccent;
-    for (var point in robot.trajectory) {
-      final px = mapData.toPixel(point.x, point.y);
-      canvas.drawCircle(Offset(px.dx, px.dy), 2.0, dotPaint);
+
+    // 2. 高亮绘制当前选中的巡逻过程心跳轨迹
+    if (highlightedTrajectory != null && highlightedTrajectory!.isNotEmpty) {
+      final highlightPaint = Paint()
+        ..color = const Color(0xFF00F0FF) // 高亮青蓝色
+        ..strokeWidth = 4.0
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+
+      if (highlightedTrajectory!.length >= 2) {
+        final path = Path();
+        bool isFirst = true;
+        for (var point in highlightedTrajectory!) {
+          final px = mapData.toPixel(point.x, point.y);
+          if (isFirst) {
+            path.moveTo(px.dx, px.dy);
+            isFirst = false;
+          } else {
+            path.lineTo(px.dx, px.dy);
+          }
+        }
+        canvas.drawPath(path, highlightPaint);
+      }
+
+      // 绘制高亮心跳点
+      final dotPaint = Paint()..color = Colors.amberAccent;
+      for (var point in highlightedTrajectory!) {
+        final px = mapData.toPixel(point.x, point.y);
+        canvas.drawCircle(Offset(px.dx, px.dy), 3.5, dotPaint);
+      }
+
+      // 绘制起点 Marker（绿底黑心）
+      final startPx = mapData.toPixel(highlightedTrajectory!.first.x, highlightedTrajectory!.first.y);
+      canvas.drawCircle(Offset(startPx.dx, startPx.dy), 7.0, Paint()..color = Colors.greenAccent);
+      canvas.drawCircle(Offset(startPx.dx, startPx.dy), 3.5, Paint()..color = Colors.black);
+
+      // 绘制终点 Marker（红底白心）
+      if (highlightedTrajectory!.length > 1) {
+        final endPx = mapData.toPixel(highlightedTrajectory!.last.x, highlightedTrajectory!.last.y);
+        canvas.drawCircle(Offset(endPx.dx, endPx.dy), 7.0, Paint()..color = Colors.redAccent);
+        canvas.drawCircle(Offset(endPx.dx, endPx.dy), 3.5, Paint()..color = Colors.white);
+      }
     }
   }
 }
@@ -130,6 +184,27 @@ class RobotMapGame extends FlameGame with ScaleDetector, ScrollDetector {
   Vector2? _lastFocalPoint;
 
   RobotMapGame(this.mapData, this.robot, {this.onPointClicked});
+
+  void setHighlightedTrajectory(List<TrajectoryPoint>? points) {
+    final trajLayers = world.children.whereType<TrajectoryLayerComponent>();
+    if (trajLayers.isNotEmpty) {
+      trajLayers.first.highlightedTrajectory = points;
+    }
+    if (points != null && points.isNotEmpty) {
+      double minX = points.first.x, maxX = points.first.x;
+      double minY = points.first.y, maxY = points.first.y;
+      for (var p in points) {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      }
+      double centerX = (minX + maxX) / 2;
+      double centerY = (minY + maxY) / 2;
+      final px = mapData.toPixel(centerX, centerY);
+      camera.viewfinder.position = Vector2(px.dx, px.dy);
+    }
+  }
 
   @override
   Color backgroundColor() => Colors.black;

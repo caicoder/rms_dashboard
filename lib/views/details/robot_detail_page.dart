@@ -1380,7 +1380,43 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
                       initiallyExpanded: false,
                       iconColor: Colors.blueAccent,
                       collapsedIconColor: Colors.white54,
-                      title: Text(session.recordId.isEmpty || session.recordId.startsWith('session_') ? '巡逻任务 (本地记录)' : '任务 ID: ${session.recordId}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              session.recordId.isEmpty || session.recordId.startsWith('session_')
+                                  ? '巡逻任务 (本地记录)'
+                                  : '任务 ID: ${session.recordId}',
+                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: () => _showPatrolTrajectoryOnMap(robot, session),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.cyanAccent.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.cyanAccent.withOpacity(0.4)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.map_rounded, color: Colors.cyanAccent, size: 13),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    '绘制轨迹',
+                                    style: TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       subtitle: Text('共 ${session.events.length} 个详细事件\n$timeStr', style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.4)),
                       children: session.events.map((e) {
                         IconData icon;
@@ -1420,6 +1456,52 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
         ),
       ],
     );
+  }
+
+  void _showPatrolTrajectoryOnMap(RobotModel robot, PatrolSession session) {
+    if (_game == null) {
+      Get.snackbar(
+        '提示',
+        '地图组件未就绪，请稍后再试',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.amber.shade900,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    final startTime = session.startTime;
+    final endTime = session.endTime ??
+        (session.events.isNotEmpty ? session.events.last.time : DateTime.now());
+
+    // 考虑到点位与心跳接收的时间误差，向前向后各扩充10秒
+    final startMargin = startTime.subtract(const Duration(seconds: 10));
+    final endMargin = endTime.add(const Duration(seconds: 10));
+
+    final patrolPoints = robot.trajectory.where((pt) {
+      return !pt.time.isBefore(startMargin) && !pt.time.isAfter(endMargin);
+    }).toList();
+
+    _game!.setHighlightedTrajectory(patrolPoints);
+
+    if (patrolPoints.isEmpty) {
+      Get.snackbar(
+        '巡逻轨迹',
+        '该巡逻时间段内无录入的心跳坐标数据',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.amber.shade900,
+        colorText: Colors.white,
+      );
+    } else {
+      Get.snackbar(
+        '巡逻轨迹已在地图绘制',
+        '匹配到该巡逻过程共 ${patrolPoints.length} 个心跳坐标 (x,y)，已高亮显示于地图',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFF065F46),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 4),
+      );
+    }
   }
 
   Widget _buildHealthPanel(RobotModel robot) {

@@ -117,7 +117,33 @@ class RobotController extends GetxController {
       print('Exception in _loadRobots: $e');
     } finally {
       _isLoaded = true;
+      _cleanOldMqttData();
     }
+  }
+
+  /// 只保留当天的 MQTT 数据，删除当天之前的所有 MQTT 历史数据
+  void _cleanOldMqttData() {
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
+
+    // 1. 清理 activeAlarms 中非当天的告警
+    activeAlarms.removeWhere((alarm) => alarm.time.isBefore(startOfToday));
+
+    // 2. 清理各设备中的轨迹、巡逻、告警、健康监测历史数据
+    for (var robot in robots) {
+      robot.trajectory.removeWhere((point) => point.time.isBefore(startOfToday));
+      robot.alarmHistory.removeWhere((alarm) => alarm.time.isBefore(startOfToday));
+      robot.healthHistory.removeWhere((health) => health.time.isBefore(startOfToday));
+      robot.patrolHistory.removeWhere((key, session) => session.startTime.isBefore(startOfToday));
+
+      // 检查设备上是否有跌倒告警标记
+      bool hasFall = activeAlarms.any((a) => a.robotId == robot.id && a.alarmTitle == '跌倒告警');
+      if (!hasFall) {
+        robot.hasFallAlarm = false;
+      }
+    }
+
+    saveRobots();
   }
 
   Future<void> saveRobots() async {
