@@ -206,8 +206,12 @@ class RobotMapGame extends FlameGame with ScaleDetector, ScrollDetector {
     }
   }
 
+  Future<void> changeMapStyle(MapStyle newStyle) async {
+    await mapData.updateStyle(newStyle);
+  }
+
   @override
-  Color backgroundColor() => Colors.black;
+  Color backgroundColor() => mapData.style == MapStyle.light ? const Color(0xFFCBD5E1) : Colors.black;
 
   @override
   Future<void> onLoad() async {

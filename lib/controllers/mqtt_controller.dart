@@ -261,7 +261,7 @@ class MqttController extends GetxController with WidgetsBindingObserver {
     final topic = 'HuaXi/01/01/huaxi001/P/D/$sn';
     final jsonStr = jsonEncode(payload);
     final builder = MqttClientPayloadBuilder();
-    builder.addString(jsonStr);
+    builder.addUTF8String(jsonStr);
     try {
       client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
       return true;

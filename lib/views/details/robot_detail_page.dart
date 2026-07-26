@@ -15,8 +15,11 @@ import '../../utils/http_util.dart';
 import '../../utils/api_util.dart';
 import '../../utils/toast_util.dart';
 import 'package:shengwang_rtc_engine/agora_rtc_engine.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../controllers/auth_controller.dart';
 import '../widgets/tv_focus_helper.dart';
 import '../widgets/monitoring_control_widget.dart';
+import '../login/login_page.dart';
 import 'flame/robot_map_game.dart';
 
 class RobotDetailPage extends StatefulWidget {
@@ -34,6 +37,8 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   RobotMapGame? _game;
   bool _isLoadingMap = true;
   bool _mapLoadFailed = false;
+  MapStyle _currentMapStyle = MapStyle.light;
+  bool _showScreenControl = false; // 屏幕控制默认隐藏
 
   // 侧边栏状态
   String? _activePanel; // 'alarm', 'patrol', 'health', 'trajectory', 'command'
@@ -243,6 +248,27 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   }
 
   void _startRemoteControl(RobotModel robot) {
+    final authController = Get.find<AuthController>();
+    if (!authController.isLoggedIn.value && !HuaxiUtil.isLogn) {
+      Get.defaultDialog(
+        title: "未登录访问拦截",
+        titleStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent, fontSize: 18),
+        content: const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Text("高级权限限制：屏幕控制属于高级功能，需优先通过钉钉授权登录！"),
+        ),
+        textConfirm: "去登录",
+        confirmTextColor: Colors.white,
+        buttonColor: const Color(0xFF3B82F6),
+        textCancel: "取消",
+        onConfirm: () {
+          Get.back();
+          Get.to(() => const LoginPage());
+        },
+      );
+      return;
+    }
+
     final userId = _getOrCreateUserId();
     final timeTag = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
@@ -291,7 +317,12 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     final robot = robotController.robots[robotIndex];
 
     try {
-      final mapData = await MapData.loadFromCloud(robot.id);
+      final prefs = await SharedPreferences.getInstance();
+      final savedStyleStr = prefs.getString("user_map_style_pref") ?? "light";
+      _currentMapStyle = savedStyleStr == "dark" ? MapStyle.dark : MapStyle.light;
+      _showScreenControl = prefs.getBool("show_screen_control_pref") ?? false;
+
+      final mapData = await MapData.loadFromCloud(robot.id, initialStyle: _currentMapStyle);
       if (mapData != null && mounted) {
         setState(() {
           _game = RobotMapGame(mapData, robot, onPointClicked: (pt) {
@@ -374,7 +405,7 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
             final robotIndex = robotController.robots.indexWhere((r) => r.id == widget.robotId);
             if (robotIndex < 0) return const SizedBox();
             final robot = robotController.robots[robotIndex];
-            return   !HuaxiUtil.isLogn?SizedBox():Padding(
+            return !HuaxiUtil.isLogn ? const SizedBox() : Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -392,20 +423,22 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
                     label: const Text('查看监控', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                     onPressed: () => _startMonitoring(robot),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+                  if (_showScreenControl) ...[
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        elevation: 2,
                       ),
-                      elevation: 2,
+                      icon: const Icon(Icons.settings_remote_rounded, size: 18),
+                      label: const Text('控制屏幕', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                      onPressed: () => _startRemoteControl(robot),
                     ),
-                    icon: const Icon(Icons.settings_remote_rounded, size: 18),
-                    label: const Text('控制屏幕', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                    onPressed: () => _startRemoteControl(robot),
-                  ),
+                  ],
                 ],
               ),
             );
@@ -626,35 +659,362 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     bool isCritical = robot.eStop || robot.hasFallAlarm;
     Color themeColor = isCritical ? Colors.redAccent : Colors.blueAccent;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B).withOpacity(0.9),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: themeColor.withOpacity(0.5), width: 1),
+    return TvFocusHelper(
+      onTap: () => _showStatusAndMapStyleDialog(robot),
+      onLongPress: () => _handleLongPressFloatingStatus(robot),
+      borderRadius: BorderRadius.circular(12),
+      focusColor: themeColor,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E293B).withOpacity(0.95),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: themeColor.withOpacity(0.5), width: 1.5),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4)),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(isCritical ? Icons.warning_rounded : Icons.smart_toy_rounded, color: themeColor),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Text(robot.naturalStatus, style: TextStyle(color: themeColor, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _currentMapStyle == MapStyle.light ? Icons.wb_sunny_rounded : Icons.nightlight_round,
+                            size: 12,
+                            color: Colors.amberAccent,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _currentMapStyle == MapStyle.light ? "黑灰白" : "黑色",
+                            style: const TextStyle(color: Colors.white70, fontSize: 10),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text('电量: ${robot.soc}%', style: TextStyle(color: robot.soc < 15 ? Colors.red : Colors.greenAccent, fontSize: 12)),
+                    const SizedBox(width: 12),
+                    Text('急停: ${robot.eStop ? "触发" : "正常"}', style: TextStyle(color: robot.eStop ? Colors.red : Colors.white70, fontSize: 12)),
+                  ],
+                )
+              ],
+            )
+          ],
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(isCritical ? Icons.warning_rounded : Icons.smart_toy_rounded, color: themeColor),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(robot.naturalStatus, style: TextStyle(color: themeColor, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Row(
+    );
+  }
+
+  void _showStatusAndMapStyleDialog(RobotModel robot) {
+    Get.dialog(
+      StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Dialog(
+            backgroundColor: const Color(0xFF1E293B),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Container(
+              width: 440,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('电量: ${robot.soc}%', style: TextStyle(color: robot.soc < 15 ? Colors.red : Colors.greenAccent, fontSize: 12)),
-                  const SizedBox(width: 12),
-                  Text('急停: ${robot.eStop ? "触发" : "正常"}', style: TextStyle(color: robot.eStop ? Colors.red : Colors.white70, fontSize: 12)),
+                  // Header
+                  Row(
+                    children: [
+                      const Icon(Icons.tune_rounded, color: Colors.blueAccent, size: 24),
+                      const SizedBox(width: 8),
+                      const Text(
+                        "设备状态与地图设置",
+                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white70),
+                        onPressed: () => Get.back(),
+                      ),
+                    ],
+                  ),
+                  const Divider(color: Colors.white24, height: 20),
+
+                  // Robot info card
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("设备 SN:", style: TextStyle(color: Colors.white70)),
+                            Text(robot.id, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("运行状态:", style: TextStyle(color: Colors.white70)),
+                            Text(robot.naturalStatus, style: TextStyle(color: robot.eStop ? Colors.redAccent : Colors.greenAccent, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("电池电量:", style: TextStyle(color: Colors.white70)),
+                            Text("${robot.soc}%", style: TextStyle(color: robot.soc < 15 ? Colors.redAccent : Colors.greenAccent, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+                  const Text("地图显示风格", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  const Text(
+                    "说明：黑灰白模式下无障碍通行区域显示纯白色，障碍物显示黑色，高对比度更清晰；黑色模式适用于暗色光线环境。",
+                    style: TextStyle(color: Colors.white60, fontSize: 12),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Style toggle options
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TvFocusHelper(
+                          onTap: () async {
+                            if (_currentMapStyle == MapStyle.light) return;
+                            setDialogState(() {
+                              _currentMapStyle = MapStyle.light;
+                            });
+                            await _switchMapStyle(MapStyle.light);
+                            if (mounted) setState(() {});
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          focusColor: Colors.blueAccent,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              color: _currentMapStyle == MapStyle.light
+                                  ? Colors.blueAccent.withOpacity(0.2)
+                                  : const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _currentMapStyle == MapStyle.light
+                                    ? Colors.blueAccent
+                                    : Colors.white12,
+                                width: 2,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.wb_sunny_rounded,
+                                  color: _currentMapStyle == MapStyle.light ? Colors.blueAccent : Colors.white60,
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  "默认黑灰白\n(无障碍白色)",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: _currentMapStyle == MapStyle.light ? Colors.blueAccent : Colors.white70,
+                                    fontWeight: _currentMapStyle == MapStyle.light ? FontWeight.bold : FontWeight.normal,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TvFocusHelper(
+                          onTap: () async {
+                            if (_currentMapStyle == MapStyle.dark) return;
+                            setDialogState(() {
+                              _currentMapStyle = MapStyle.dark;
+                            });
+                            await _switchMapStyle(MapStyle.dark);
+                            if (mounted) setState(() {});
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          focusColor: Colors.blueAccent,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              color: _currentMapStyle == MapStyle.dark
+                                  ? Colors.blueAccent.withOpacity(0.2)
+                                  : const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _currentMapStyle == MapStyle.dark
+                                    ? Colors.blueAccent
+                                    : Colors.white12,
+                                width: 2,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.nightlight_round,
+                                  color: _currentMapStyle == MapStyle.dark ? Colors.blueAccent : Colors.white60,
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  "黑色暗夜\n(经典黑色)",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: _currentMapStyle == MapStyle.dark ? Colors.blueAccent : Colors.white70,
+                                    fontWeight: _currentMapStyle == MapStyle.dark ? FontWeight.bold : FontWeight.normal,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF3B82F6),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => Get.back(),
+                      child: const Text("完成", style: TextStyle(color: Colors.white, fontSize: 16)),
+                    ),
+                  ),
                 ],
-              )
-            ],
-          )
-        ],
+              ),
+            ),
+          );
+        },
       ),
+    );
+  }
+
+  Future<void> _switchMapStyle(MapStyle newStyle) async {
+    _currentMapStyle = newStyle;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString("user_map_style_pref", newStyle == MapStyle.dark ? "dark" : "light");
+
+    if (_game != null) {
+      await _game!.changeMapStyle(newStyle);
+    }
+  }
+
+  void _handleLongPressFloatingStatus(RobotModel robot) {
+    final authController = Get.find<AuthController>();
+
+    // 1. 登录优先级最高：优先校验登录状态
+    if (!authController.isLoggedIn.value && !HuaxiUtil.isLogn) {
+      Get.defaultDialog(
+        title: "未登录访问拦截",
+        titleStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent, fontSize: 18),
+        content: const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              Icon(Icons.lock_rounded, size: 48, color: Colors.redAccent),
+              SizedBox(height: 12),
+              Text(
+                "高级权限限制：长按切换【屏幕控制】显示前，必须优先通过钉钉授权登录！",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+        textConfirm: "去登录",
+        confirmTextColor: Colors.white,
+        buttonColor: const Color(0xFF3B82F6),
+        textCancel: "取消",
+        onConfirm: () {
+          Get.back();
+          Get.to(() => const LoginPage());
+        },
+      );
+      return;
+    }
+
+    // 2. 已登录状态：弹窗确认是否显示/隐藏屏幕控制功能
+    Get.defaultDialog(
+      title: "屏幕控制功能设置",
+      titleStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.blueAccent),
+      content: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Icon(
+              _showScreenControl ? Icons.visibility_off_rounded : Icons.settings_remote_rounded,
+              size: 48,
+              color: _showScreenControl ? Colors.amberAccent : Colors.greenAccent,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _showScreenControl
+                  ? "当前【屏幕控制】功能处于[显示]状态。是否确认隐藏屏幕控制功能按钮？"
+                  : "当前【屏幕控制】功能处于[隐藏]状态。是否确认开启并显示屏幕控制功能？",
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, color: Colors.white),
+            ),
+          ],
+        ),
+      ),
+      textConfirm: _showScreenControl ? "隐藏按钮" : "开启显示",
+      confirmTextColor: Colors.white,
+      buttonColor: _showScreenControl ? Colors.redAccent : const Color(0xFF10B981),
+      textCancel: "取消",
+      onConfirm: () async {
+        Get.back();
+        setState(() {
+          _showScreenControl = !_showScreenControl;
+        });
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool("show_screen_control_pref", _showScreenControl);
+
+        Get.snackbar(
+          "状态已更新",
+          _showScreenControl ? "屏幕控制功能已开启并显示" : "屏幕控制功能已隐藏",
+          backgroundColor: _showScreenControl ? Colors.greenAccent : Colors.orangeAccent,
+          colorText: Colors.black,
+          duration: const Duration(seconds: 2),
+        );
+      },
     );
   }
 

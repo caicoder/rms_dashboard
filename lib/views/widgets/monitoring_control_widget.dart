@@ -15,6 +15,7 @@ class MonitoringControlWidget extends StatefulWidget {
   final Function(Offset delta)? onDrag;
   final int initialMode; // 0 for Camera Monitoring, 1 for Screen Control
   final int userId;
+  final bool allowScreenControl;
 
   const MonitoringControlWidget({
     Key? key,
@@ -28,6 +29,7 @@ class MonitoringControlWidget extends StatefulWidget {
     this.onDrag,
     required this.userId,
     this.initialMode = 0,
+    this.allowScreenControl = true,
   }) : super(key: key);
 
   @override
@@ -280,11 +282,12 @@ class _MonitoringControlWidgetState extends State<MonitoringControlWidget> {
                           modeIndex: 0,
                           icon: Icons.videocam_rounded,
                         ),
-                        _buildModeButton(
-                          label: "屏幕控制",
-                          modeIndex: 1,
-                          icon: Icons.gamepad_rounded,
-                        ),
+                        if (widget.allowScreenControl)
+                          _buildModeButton(
+                            label: "屏幕控制",
+                            modeIndex: 1,
+                            icon: Icons.gamepad_rounded,
+                          ),
                       ],
                     ),
                   ),
