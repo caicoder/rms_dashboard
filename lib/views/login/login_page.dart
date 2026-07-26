@@ -104,7 +104,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       "redirect_uri": DingAuthConfig.redirectUri,
       "response_type": "code",
       "client_id": DingAuthConfig.appKey,
-      "scope": "openid Contact.Read.User",
+      "scope": "openid",
       "state": DateTime.now().millisecondsSinceEpoch.toString()
     });
     final authUrl = uri.toString();
