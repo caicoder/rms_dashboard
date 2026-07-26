@@ -531,6 +531,7 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
                     statusMessage: _rtcStatusMessage,
                     userId: _getOrCreateUserId(),
                     initialMode: _monitoringOrControlMode,
+                    allowScreenControl: _showScreenControl,
                     onClose: () {
                       setState(() {
                         _showMonitoringOrControl = false;

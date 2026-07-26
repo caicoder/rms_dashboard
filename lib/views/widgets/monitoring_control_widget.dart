@@ -29,7 +29,7 @@ class MonitoringControlWidget extends StatefulWidget {
     this.onDrag,
     required this.userId,
     this.initialMode = 0,
-    this.allowScreenControl = true,
+    this.allowScreenControl = false,
   }) : super(key: key);
 
   @override
@@ -51,7 +51,7 @@ class _MonitoringControlWidgetState extends State<MonitoringControlWidget> {
   @override
   void initState() {
     super.initState();
-    _currentMode = widget.initialMode;
+    _currentMode = widget.allowScreenControl ? widget.initialMode : 0;
     try {
       _mqttController = Get.find<MqttController>();
       _mqttConnected = true;
