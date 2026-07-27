@@ -25,7 +25,7 @@ class AuthController extends GetxController {
     try {
       final prefs = await SharedPreferences.getInstance();
       final String? token = prefs.getString("user_token");
-      final String? loginDate = ''; //prefs.getString("login_date");
+      final String? loginDate = prefs.getString("login_date");
       final String todayStr = DateTime.now().toString().substring(0, 10); // "YYYY-MM-DD"
 
       // 检查 Token 存在且登录日期为今天；若非今天，则清空登录状态，要求每日重新登录

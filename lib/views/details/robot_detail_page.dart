@@ -91,13 +91,12 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     return completer.future;
   }
 
-  Future<void> _initSharedRtc(RobotModel robot) async {
-    if (_isEngineJoined) return;
+  Future<bool> _initSharedRtc(RobotModel robot) async {
+    if (_isEngineJoined && _shengwangToken.isNotEmpty) return true;
     try {
       final String channelId = "${robot.id}_channel";
       setState(() {
         _rtcStatusMessage = "正在获取安全令牌 (Token)...";
-        _isEngineJoined = true;
       });
 
       String token = "";
@@ -108,7 +107,7 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
           _rtcStatusMessage = "获取Token失败: $e";
           _isEngineJoined = false;
         });
-        return;
+        return false;
       }
 
       setState(() {
@@ -176,6 +175,9 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
           publishMicrophoneTrack: false,
         ),
       );
+
+      _isEngineJoined = true;
+      return true;
     } catch (e) {
       debugPrint("Error initializing shared RTC: $e");
       if (mounted) {
@@ -184,6 +186,7 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
           _isEngineJoined = false;
         });
       }
+      return false;
     }
   }
 
@@ -210,7 +213,22 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     }
   }
 
-  void _startMonitoring(RobotModel robot) {
+  Future<void> _startMonitoring(RobotModel robot) async {
+    if (!_isEngineJoined) {
+      final rtcSuccess = await _initSharedRtc(robot);
+      if (!rtcSuccess) {
+        Get.snackbar(
+          '连接失败',
+          '获取声网 Token 或初始化音视频引擎失败，未发送监控指令',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.redAccent.withOpacity(0.9),
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+        return;
+      }
+    }
+
     final userId = _getOrCreateUserId();
     final timeTag = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
@@ -237,17 +255,13 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
       duration: const Duration(seconds: 3),
     );
 
-    if (!_isEngineJoined) {
-      _initSharedRtc(robot);
-    }
-
     setState(() {
       _monitoringOrControlMode = 0;
       _showMonitoringOrControl = true;
     });
   }
 
-  void _startRemoteControl(RobotModel robot) {
+  Future<void> _startRemoteControl(RobotModel robot) async {
     final authController = Get.find<AuthController>();
     if (!authController.isLoggedIn.value && !HuaxiUtil.isLogn) {
       Get.defaultDialog(
@@ -267,6 +281,21 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
         },
       );
       return;
+    }
+
+    if (!_isEngineJoined) {
+      final rtcSuccess = await _initSharedRtc(robot);
+      if (!rtcSuccess) {
+        Get.snackbar(
+          '连接失败',
+          '获取声网 Token 或初始化音视频引擎失败，未发送控制指令',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.redAccent.withOpacity(0.9),
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+        return;
+      }
     }
 
     final userId = _getOrCreateUserId();
@@ -294,10 +323,6 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
       colorText: Colors.white,
       duration: const Duration(seconds: 3),
     );
-
-    if (!_isEngineJoined) {
-      _initSharedRtc(robot);
-    }
 
     setState(() {
       _monitoringOrControlMode = 1;
