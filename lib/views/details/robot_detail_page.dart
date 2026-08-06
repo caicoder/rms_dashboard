@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../controllers/auth_controller.dart';
 import '../widgets/tv_focus_helper.dart';
 import '../widgets/monitoring_control_widget.dart';
+import '../widgets/draggable_resizable_window.dart';
 import '../login/login_page.dart';
 import 'flame/robot_map_game.dart';
 
@@ -45,10 +46,11 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   bool _isPanelOpen = false;
 
   // 监控与控制弹窗状态
-  bool _showMonitoringOrControl = false;
-  int _monitoringOrControlMode = 0; // 0 for monitoring, 1 for control
-  double _overlayLeft = 120.0;
-  double _overlayTop = 120.0;
+  bool _showCameraWindow = false;
+  bool _showScreenWindow = false;
+  Rect _cameraWindowRect = const Rect.fromLTWH(80, 80, 640, 360);
+  Rect _screenWindowRect = const Rect.fromLTWH(120, 120, 640, 360);
+  int _activeWindowZIndex = 0; // 0: camera on top, 1: screen on top
   int? _currentUserId;
 
   int _getOrCreateUserId() {
@@ -134,7 +136,10 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
             debugPrint("Remote user joined shared channel: $remoteUid");
             if (mounted) {
               setState(() {
-                _remoteUid = remoteUid;
+                // 严格匹配机器人的主摄像头 UID (10086)，防止其他控制端/观众 (如 UID 212) 覆盖它
+                if (remoteUid == 10086) {
+                  _remoteUid = remoteUid;
+                }
                 _rtcStatusMessage = "已连接机器人";
               });
             }
@@ -143,8 +148,11 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
             debugPrint("Remote user offline: $remoteUid");
             if (mounted) {
               setState(() {
-                _remoteUid = null;
-                _rtcStatusMessage = "机器人已断开连接";
+                // 只有主摄像头退出时，才将 _remoteUid 置空
+                if (_remoteUid == remoteUid) {
+                  _remoteUid = null;
+                  _rtcStatusMessage = "机器人已断开连接";
+                }
               });
             }
           },
@@ -256,8 +264,8 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     );
 
     setState(() {
-      _monitoringOrControlMode = 0;
-      _showMonitoringOrControl = true;
+      _showCameraWindow = true;
+      _activeWindowZIndex = 0;
     });
   }
 
@@ -325,8 +333,8 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     );
 
     setState(() {
-      _monitoringOrControlMode = 1;
-      _showMonitoringOrControl = true;
+      _showScreenWindow = true;
+      _activeWindowZIndex = 1;
     });
   }
 
@@ -397,9 +405,7 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _showMonitoringOrControl
-          ? null
-          : AppBar(
+      appBar: AppBar(
         title: Obx(() {
           final robotIndex = robotController.robots.indexWhere((r) => r.id == widget.robotId);
           if (robotIndex < 0) {
@@ -448,22 +454,6 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
                     label: const Text('查看监控', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                     onPressed: () => _startMonitoring(robot),
                   ),
-                  if (_showScreenControl) ...[
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        elevation: 2,
-                      ),
-                      icon: const Icon(Icons.settings_remote_rounded, size: 18),
-                      label: const Text('控制屏幕', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                      onPressed: () => _startRemoteControl(robot),
-                    ),
-                  ],
                 ],
               ),
             );
@@ -542,33 +532,94 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
                 ),
               ),
 
-            // 6. 监控与控制悬浮窗 (全屏显示)
-            if (_showMonitoringOrControl)
-              Positioned.fill(
-                child: Container(
-                  color: const Color(0xFF0F172A),
-                  child: MonitoringControlWidget(
-                    channelId: "${robot.id}_channel",
-                    robotId: robot.id,
-                    engine: _sharedEngine,
-                    remoteUid: _remoteUid,
-                    isReady: _sharedEngine != null,
-                    statusMessage: _rtcStatusMessage,
-                    userId: _getOrCreateUserId(),
-                    initialMode: _monitoringOrControlMode,
-                    allowScreenControl: _showScreenControl,
-                    onClose: () {
-                      setState(() {
-                        _showMonitoringOrControl = false;
-                      });
-                      _cleanupSharedRtc();
-                    },
-                  ),
-                ),
-              ),
+            // 6. 弹窗层级渲染
+            if (_showScreenWindow && _activeWindowZIndex == 0)
+              _buildScreenWindow(robot),
+            if (_showCameraWindow)
+              _buildCameraWindow(robot),
+            if (_showScreenWindow && _activeWindowZIndex == 1)
+              _buildScreenWindow(robot),
           ],
         );
       }),
+    );
+  }
+
+  Widget _buildCameraWindow(RobotModel robot) {
+    return DraggableResizableWindow(
+      initialRect: _cameraWindowRect,
+      title: "监控: ${robot.id}",
+      icon: Icons.videocam_rounded,
+      onPointerDown: () {
+        if (_activeWindowZIndex != 0) setState(() => _activeWindowZIndex = 0);
+      },
+      onClose: () {
+        setState(() {
+          _showCameraWindow = false;
+          if (!_showScreenWindow) _cleanupSharedRtc();
+        });
+      },
+      extraHeaderWidget: _showScreenControl
+          ? ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                minimumSize: const Size(0, 26),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.settings_remote_rounded, size: 14),
+              label: const Text('屏幕控制', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              onPressed: () => _startRemoteControl(robot),
+            )
+          : null,
+      child: CameraStreamWidget(
+        channelId: "${robot.id}_channel",
+        robotId: robot.id,
+        engine: _sharedEngine,
+        remoteUid: 10086,
+        isReady: _sharedEngine != null,
+        statusMessage: _rtcStatusMessage,
+      ),
+    );
+  }
+
+  Widget _buildScreenWindow(RobotModel robot) {
+    return DraggableResizableWindow(
+      initialRect: _screenWindowRect,
+      title: "控制: ${robot.id}",
+      icon: Icons.gamepad_rounded,
+      onPointerDown: () {
+        if (_activeWindowZIndex != 1) setState(() => _activeWindowZIndex = 1);
+      },
+      onClose: () {
+        setState(() {
+          _showScreenWindow = false;
+          if (!_showCameraWindow) _cleanupSharedRtc();
+        });
+        
+        // 退出屏幕控制的信令
+        final timeTag = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        final payload = {
+          "cmdId": 66,
+          "timeTag": timeTag,
+          "body": {
+            "type": "0", // 假设回退到 0（监控状态）或关闭
+            "subtype": null,
+            "params": {"userId": _getOrCreateUserId()},
+            "target": ""
+          }
+        };
+        mqttController.publishCommand(robot.id, payload);
+      },
+      child: ScreenControlStreamWidget(
+        channelId: "${robot.id}_channel",
+        robotId: robot.id,
+        engine: _sharedEngine,
+        remoteUid: 20086, // 机器人端主 UID 是 10086，屏幕是 20086
+        isReady: _sharedEngine != null,
+        statusMessage: _rtcStatusMessage,
+      ),
     );
   }
 
