@@ -488,7 +488,55 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
         await Process.run('open', [uriString]);
         ToastUtil.show('正在调起 ToDesk 连接: $clientId');
       } else if (UniversalPlatform.isWindows) {
-        await Process.run('cmd', ['/c', 'start', '', uriString]);
+        bool launched = false;
+        
+        // 尝试 1: cmd /c start "" "todesk://..." (带双引号包裹，防止 & 符被 Windows cmd 解析截断)
+        try {
+          final res = await Process.run('cmd', ['/c', 'start', '', '"$uriString"']);
+          if (res.exitCode == 0) launched = true;
+        } catch (e) {
+          print('CMD launch failed: $e');
+        }
+
+        // 尝试 2: explorer.exe 原生调起协议
+        if (!launched) {
+          try {
+            final res = await Process.run('explorer', [uriString]);
+            if (res.exitCode == 0) launched = true;
+          } catch (e) {
+            print('Explorer launch failed: $e');
+          }
+        }
+
+        // 尝试 3: powershell Start-Process
+        if (!launched) {
+          try {
+            final res = await Process.run('powershell', ['-Command', 'Start-Process "$uriString"']);
+            if (res.exitCode == 0) launched = true;
+          } catch (e) {
+            print('PowerShell launch failed: $e');
+          }
+        }
+
+        // 尝试 4: 检索 Windows 默认物理安装路径直接启动 ToDesk.exe 并传参
+        if (!launched) {
+          final localAppData = Platform.environment['LOCALAPPDATA'] ?? '';
+          final appData = Platform.environment['APPDATA'] ?? '';
+          final possiblePaths = [
+            r'C:\Program Files (x86)\ToDesk\ToDesk.exe',
+            r'C:\Program Files\ToDesk\ToDesk.exe',
+            if (localAppData.isNotEmpty) '$localAppData\\ToDesk\\ToDesk.exe',
+            if (appData.isNotEmpty) '$appData\\ToDesk\\ToDesk.exe',
+          ];
+          for (var exePath in possiblePaths) {
+            if (File(exePath).existsSync()) {
+              await Process.run(exePath, ['-connect', clientId, '-password', 'huaxi123']);
+              launched = true;
+              break;
+            }
+          }
+        }
+
         ToastUtil.show('正在调起 ToDesk 连接: $clientId');
       } else {
         ToastUtil.show('仅支持 macOS / Windows 端调起 ToDesk');
