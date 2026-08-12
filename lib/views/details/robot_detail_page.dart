@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:yaml/yaml.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
@@ -379,11 +381,85 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     'privatedata': '私有数据',
   };
 
+  List<WayPointItem> _allWayPoints = [];
+  String _selectedWayPointType = '';
+  bool _isLoadingWaypoints = false;
+
   @override
   void initState() {
     super.initState();
     _initMap();
     _checkTodeskConfig();
+    _loadCloudWaypoints();
+  }
+
+  Future<void> _loadCloudWaypoints() async {
+    if (_isLoadingWaypoints) return;
+    setState(() => _isLoadingWaypoints = true);
+
+    final url = 'https://huaxi-1330823579.cos.ap-shanghai.myqcloud.com/devicepoints/${widget.robotId}/web_waypoints.yaml';
+    try {
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final yamlStr = utf8.decode(response.bodyBytes);
+        final doc = loadYaml(yamlStr);
+        List<WayPointItem> points = [];
+        dynamic rawList;
+        if (doc is Map) {
+          rawList = doc['waypoints'] ?? doc['points'] ?? doc['nodes'];
+        } else if (doc is List) {
+          rawList = doc;
+        }
+        if (rawList is List) {
+          for (var item in rawList) {
+            points.add(WayPointItem.fromYaml(item));
+          }
+        }
+        if (mounted) {
+          setState(() {
+            _allWayPoints = points;
+            _isLoadingWaypoints = false;
+          });
+          _game?.updateWaypoints(_allWayPoints, filter: _selectedWayPointType);
+        }
+      } else {
+        if (mounted) setState(() => _isLoadingWaypoints = false);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingWaypoints = false);
+      print('Error loading cloud waypoints: $e');
+    }
+  }
+
+  String _getWayPointTypeName(String type) {
+    switch (type.trim()) {
+      case 'normal':
+      case '0':
+        return '普通';
+      case 'charging':
+      case 'charge':
+      case '1':
+        return '充电站';
+      case 'relocation':
+        return '重定位点';
+      case 'delivery':
+        return '送货点';
+      case 'patrol':
+      case '3':
+        return '巡逻点';
+      case 'reception':
+      case 'welcome':
+        return '接待点';
+      case 'passby':
+        return '途经点';
+      case 'cleanPoint':
+        return '清理药盒';
+      case 'door':
+        return '门口点';
+      default:
+        if (type.isEmpty) return '全部点位';
+        return type;
+    }
   }
 
   Future<void> _checkTodeskConfig() async {
@@ -531,9 +607,19 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
       final mapData = await MapData.loadFromCloud(robot.id, initialStyle: _currentMapStyle);
       if (mapData != null && mounted) {
         setState(() {
-          _game = RobotMapGame(mapData, robot, onPointClicked: (pt) {
-            _showPointDetailsDialog(pt, robot);
-          });
+          _game = RobotMapGame(
+            mapData,
+            robot,
+            onPointClicked: (pt) {
+              _showPointDetailsDialog(pt, robot);
+            },
+            onWayPointClicked: (wp) {
+              ToastUtil.show('点位: ${wp.name} (类型: ${_getWayPointTypeName(wp.type)})\nX: ${wp.x.toStringAsFixed(2)}, Y: ${wp.y.toStringAsFixed(2)}');
+            },
+          );
+          if (_allWayPoints.isNotEmpty) {
+            _game?.updateWaypoints(_allWayPoints, filter: _selectedWayPointType);
+          }
           _isLoadingMap = false;
         });
       } else {
@@ -896,27 +982,210 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
 
   Widget _buildMapControls() {
     if (_game == null) return const SizedBox();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B).withOpacity(0.9),
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))
-        ],
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 点位图层/分类筛选按钮（红框画出的位置）
+        TvFocusHelper(
+          onTap: () => _showWaypointsTypeSheet(context),
+          borderRadius: BorderRadius.circular(20),
+          focusColor: Colors.lightBlueAccent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B).withOpacity(0.9),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.lightBlueAccent.withOpacity(0.4)),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _isLoadingWaypoints
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.lightBlueAccent),
+                      )
+                    : const Icon(Icons.place_rounded, color: Colors.lightBlueAccent, size: 18),
+                const SizedBox(width: 6),
+                Text(
+                  _selectedWayPointType.isEmpty
+                      ? '点位 (${_allWayPoints.length})'
+                      : '点位: ${_getWayPointTypeName(_selectedWayPointType)}',
+                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.keyboard_arrow_up_rounded, color: Colors.white70, size: 16),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        // 地图平移与缩放按钮组
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B).withOpacity(0.9),
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildControlButton(Icons.zoom_in_rounded, '放大', () => _game!.zoomIn()),
+              _buildControlButton(Icons.zoom_out_rounded, '缩小', () => _game!.zoomOut()),
+              Container(width: 1, height: 24, color: Colors.white24, margin: const EdgeInsets.symmetric(horizontal: 8)),
+              _buildControlButton(Icons.arrow_upward_rounded, '上移', () => _game!.moveUp()),
+              _buildControlButton(Icons.arrow_downward_rounded, '下移', () => _game!.moveDown()),
+              _buildControlButton(Icons.arrow_back_rounded, '左移', () => _game!.moveLeft()),
+              _buildControlButton(Icons.arrow_forward_rounded, '右移', () => _game!.moveRight()),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showWaypointsTypeSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E293B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildControlButton(Icons.zoom_in_rounded, '放大', () => _game!.zoomIn()),
-          _buildControlButton(Icons.zoom_out_rounded, '缩小', () => _game!.zoomOut()),
-          Container(width: 1, height: 24, color: Colors.white24, margin: const EdgeInsets.symmetric(horizontal: 8)),
-          _buildControlButton(Icons.arrow_upward_rounded, '上移', () => _game!.moveUp()),
-          _buildControlButton(Icons.arrow_downward_rounded, '下移', () => _game!.moveDown()),
-          _buildControlButton(Icons.arrow_back_rounded, '左移', () => _game!.moveLeft()),
-          _buildControlButton(Icons.arrow_forward_rounded, '右移', () => _game!.moveRight()),
-        ],
-      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final typesSet = _allWayPoints.map((p) => p.type).toSet().toList();
+            
+            final filteredPoints = _selectedWayPointType.isEmpty
+                ? _allWayPoints
+                : _allWayPoints.where((p) => p.type == _selectedWayPointType).toList();
+
+            return Container(
+              padding: const EdgeInsets.all(16.0),
+              height: MediaQuery.of(context).size.height * 0.55,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.place_rounded, color: Colors.lightBlueAccent, size: 22),
+                          const SizedBox(width: 8),
+                          Text(
+                            '地图点位管理 (共 ${_allWayPoints.length} 个点位)',
+                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      // TextButton.icon(
+                      //   icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.lightBlueAccent),
+                      //   label: const Text('同步云端', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 12)),
+                      //   onPressed: () async {
+                      //     await _loadCloudWaypoints();
+                      //     setSheetState(() {});
+                      //   },
+                      // ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ChoiceChip(
+                          label: Text('全部 (${_allWayPoints.length})'),
+                          selected: _selectedWayPointType.isEmpty,
+                          selectedColor: const Color(0xFF0284C7),
+                          backgroundColor: const Color(0xFF334155),
+                          labelStyle: const TextStyle(color: Colors.white, fontSize: 12),
+                          onSelected: (selected) {
+                            setState(() => _selectedWayPointType = '');
+                            setSheetState(() {});
+                            _game?.updateWaypoints(_allWayPoints, filter: '');
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ...typesSet.map((t) {
+                          final count = _allWayPoints.where((p) => p.type == t).length;
+                          final typeName = _getWayPointTypeName(t);
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: ChoiceChip(
+                              label: Text('$typeName ($count)'),
+                              selected: _selectedWayPointType == t,
+                              selectedColor: const Color(0xFF0284C7),
+                              backgroundColor: const Color(0xFF334155),
+                              labelStyle: const TextStyle(color: Colors.white, fontSize: 12),
+                              onSelected: (selected) {
+                                final newFilter = selected ? t : '';
+                                setState(() => _selectedWayPointType = newFilter);
+                                setSheetState(() {});
+                                _game?.updateWaypoints(_allWayPoints, filter: newFilter);
+                              },
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                  const Divider(color: Colors.white24, height: 20),
+                  Expanded(
+                    child: filteredPoints.isEmpty
+                        ? const Center(
+                            child: Text('暂无相关点位数据', style: TextStyle(color: Colors.white54)),
+                          )
+                        : ListView.builder(
+                            itemCount: filteredPoints.length,
+                            itemBuilder: (context, index) {
+                              final pt = filteredPoints[index];
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F172A),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.white10),
+                                ),
+                                child: ListTile(
+                                  dense: true,
+                                  leading: CircleAvatar(
+                                    radius: 14,
+                                    backgroundColor: const Color(0xFF0284C7).withOpacity(0.2),
+                                    child: const Icon(Icons.location_on_rounded, color: Colors.lightBlueAccent, size: 16),
+                                  ),
+                                  title: Text(
+                                    pt.name,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                  ),
+                                  subtitle: Text(
+                                    '类型: ${_getWayPointTypeName(pt.type)}  |  X: ${pt.x.toStringAsFixed(2)}, Y: ${pt.y.toStringAsFixed(2)}',
+                                    style: const TextStyle(color: Colors.white60, fontSize: 11),
+                                  ),
+                                  trailing: const Icon(Icons.center_focus_strong_rounded, color: Colors.lightBlueAccent, size: 18),
+                                  onTap: () {
+                                    _game?.focusOnPoint(pt.x, pt.y);
+                                    Navigator.pop(context);
+                                    ToastUtil.show('已聚焦到点位: ${pt.name}');
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

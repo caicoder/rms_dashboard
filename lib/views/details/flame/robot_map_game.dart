@@ -174,16 +174,143 @@ class TrajectoryLayerComponent extends PositionComponent with TapCallbacks {
   }
 }
 
+class WaypointsLayerComponent extends PositionComponent with TapCallbacks {
+  final MapData mapData;
+  List<WayPointItem> waypoints = [];
+  String activeTypeFilter = ''; // '' 表示显示全部
+  void Function(WayPointItem)? onWayPointClicked;
+
+  WaypointsLayerComponent(this.mapData, {this.onWayPointClicked}) {
+    size = Vector2(mapData.config.width.toDouble(), mapData.config.height.toDouble());
+  }
+
+  @override
+  bool containsLocalPoint(Vector2 point) => true;
+
+  @override
+  void onTapUp(TapUpEvent event) {
+    if (onWayPointClicked == null || waypoints.isEmpty) return;
+
+    final tapX = event.localPosition.x;
+    final tapY = event.localPosition.y;
+
+    WayPointItem? closestPoint;
+    double minDistance = 25.0; // 点击识别半径
+
+    for (var point in waypoints) {
+      if (activeTypeFilter.isNotEmpty && point.type != activeTypeFilter) continue;
+
+      final px = mapData.toPixel(point.x, point.y);
+      final dx = px.dx - tapX;
+      final dy = px.dy - tapY;
+      final dist = math.sqrt(dx * dx + dy * dy);
+
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestPoint = point;
+      }
+    }
+
+    if (closestPoint != null) {
+      onWayPointClicked!(closestPoint);
+    }
+  }
+
+  @override
+  void render(Canvas canvas) {
+    super.render(canvas);
+
+    for (var point in waypoints) {
+      if (activeTypeFilter.isNotEmpty && point.type != activeTypeFilter) continue;
+
+      final px = mapData.toPixel(point.x, point.y);
+      final center = Offset(px.dx, px.dy);
+
+      Color color = Colors.lightBlueAccent;
+      final t = point.type.trim();
+      if (t == 'charging' || t == 'charge' || t == '1' || point.name.contains('充')) {
+        color = Colors.amberAccent;
+      } else if (t == 'patrol' || t == '3' || point.name.contains('巡')) {
+        color = Colors.cyanAccent;
+      } else if (t == 'reception' || t == 'welcome' || point.name.contains('迎') || point.name.contains('接')) {
+        color = Colors.purpleAccent;
+      } else if (t == 'delivery' || point.name.contains('送')) {
+        color = Colors.orangeAccent;
+      } else if (t == 'relocation' || point.name.contains('重')) {
+        color = Colors.indigoAccent;
+      } else if (t == 'passby') {
+        color = Colors.tealAccent;
+      } else if (t == 'cleanPoint') {
+        color = Colors.greenAccent;
+      } else if (t == 'door' || point.name.contains('门')) {
+        color = Colors.deepOrangeAccent;
+      } else if (point.name.contains('告警') || point.name.contains('警')) {
+        color = Colors.redAccent;
+      }
+
+      // 绘制点位标记外圈与核心圆点
+      canvas.drawCircle(center, 7.0, Paint()..color = color.withOpacity(0.35));
+      canvas.drawCircle(center, 4.5, Paint()..color = color);
+      canvas.drawCircle(center, 4.5, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1.2);
+
+      // 绘制角度朝向线段
+      if (point.yaw != 0.0) {
+        const arrowLen = 10.0;
+        final endX = px.dx + arrowLen * math.cos(point.yaw);
+        final endY = px.dy - arrowLen * math.sin(point.yaw);
+        canvas.drawLine(
+          center,
+          Offset(endX, endY),
+          Paint()..color = color..strokeWidth = 2.0,
+        );
+      }
+
+      // 绘制点位名称
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: point.name,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            shadows: [
+              Shadow(color: Colors.black, blurRadius: 3, offset: Offset(0, 1)),
+            ],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, Offset(px.dx - textPainter.width / 2, px.dy + 6));
+    }
+  }
+}
+
 class RobotMapGame extends FlameGame with ScaleDetector, ScrollDetector {
   final MapData mapData;
   final RobotModel robot;
   final void Function(TrajectoryPoint)? onPointClicked;
+  final void Function(WayPointItem)? onWayPointClicked;
   
   double _currentScale = 1.0;
   double _scaleStartZoom = 1.0;
   Vector2? _lastFocalPoint;
 
-  RobotMapGame(this.mapData, this.robot, {this.onPointClicked});
+  RobotMapGame(this.mapData, this.robot, {this.onPointClicked, this.onWayPointClicked});
+
+  void updateWaypoints(List<WayPointItem> points, {String filter = ''}) {
+    final wpLayers = world.children.whereType<WaypointsLayerComponent>();
+    if (wpLayers.isNotEmpty) {
+      final layer = wpLayers.first;
+      layer.waypoints = points;
+      layer.activeTypeFilter = filter;
+    }
+  }
+
+  void focusOnPoint(double x, double y) {
+    final px = mapData.toPixel(x, y);
+    camera.viewfinder.position = Vector2(px.dx, px.dy);
+  }
 
   void setHighlightedTrajectory(List<TrajectoryPoint>? points) {
     final trajLayers = world.children.whereType<TrajectoryLayerComponent>();
@@ -219,6 +346,9 @@ class RobotMapGame extends FlameGame with ScaleDetector, ScrollDetector {
 
     final mapLayer = MapLayerComponent(mapData);
     world.add(mapLayer);
+
+    final waypointsLayer = WaypointsLayerComponent(mapData, onWayPointClicked: onWayPointClicked);
+    world.add(waypointsLayer);
 
     final trajectoryLayer = TrajectoryLayerComponent(robot, mapData, onPointClicked: onPointClicked);
     world.add(trajectoryLayer);

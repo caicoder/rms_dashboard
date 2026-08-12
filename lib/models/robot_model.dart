@@ -423,3 +423,48 @@ class NotificationMessageItem {
   );
 }
 
+class WayPointItem {
+  final String name;
+  final String type;
+  final double x;
+  final double y;
+  final double yaw;
+
+  WayPointItem({
+    required this.name,
+    required this.type,
+    required this.x,
+    required this.y,
+    this.yaw = 0.0,
+  });
+
+  factory WayPointItem.fromYaml(dynamic item) {
+    if (item is Map) {
+      double px = (item['x'] as num?)?.toDouble() ?? (item['position']?['x'] as num?)?.toDouble() ?? 0.0;
+      double py = (item['y'] as num?)?.toDouble() ?? (item['position']?['y'] as num?)?.toDouble() ?? 0.0;
+      double pyaw = (item['yaw'] as num?)?.toDouble() ?? (item['theta'] as num?)?.toDouble() ?? (item['orientation']?['z'] as num?)?.toDouble() ?? 0.0;
+      String name = item['name']?.toString() ?? item['id']?.toString() ?? '点位';
+      String type = item['type']?.toString() ?? 'normal';
+      return WayPointItem(name: name, type: type, x: px, y: py, yaw: pyaw);
+    }
+    return WayPointItem(name: '未知点位', type: 'normal', x: 0.0, y: 0.0);
+  }
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'type': type,
+    'x': x,
+    'y': y,
+    'yaw': yaw,
+  };
+
+  factory WayPointItem.fromJson(Map<String, dynamic> json) => WayPointItem(
+    name: json['name'] ?? '点位',
+    type: json['type'] ?? 'normal',
+    x: (json['x'] as num?)?.toDouble() ?? 0.0,
+    y: (json['y'] as num?)?.toDouble() ?? 0.0,
+    yaw: (json['yaw'] as num?)?.toDouble() ?? 0.0,
+  );
+}
+
+
