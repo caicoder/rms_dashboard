@@ -227,6 +227,11 @@ class MqttController extends GetxController with WidgetsBindingObserver {
 
         if (cmdId == 1) {
           robotController.updateHeartbeat(sn, body);
+        } else if (cmdId == 88) {
+          var params = body['params'];
+          if (params != null && params is Map) {
+            robotController.saveTodeskConfig(sn, Map<String, dynamic>.from(params));
+          }
         } else if (cmdId == 9) {
           String type = body['type']?.toString() ?? '';
           int subtype = body['subtype'] ?? 0;
@@ -240,7 +245,11 @@ class MqttController extends GetxController with WidgetsBindingObserver {
               if (type == '1') {
                 robotController.updatePatrolEvent(sn, params, subtype);
               } else if (type == '10') {
-                robotController.updatePatrolStatus(sn, params, subtype);
+                if (params is Map && params['msg'] != null) {
+                  robotController.addMapUpdateNotification(sn, Map<String, dynamic>.from(params));
+                } else {
+                  robotController.updatePatrolStatus(sn, params, subtype);
+                }
               }
             }
           }

@@ -386,3 +386,40 @@ class ActiveAlarmItem {
     imgUrl: json['imgUrl'],
   );
 }
+
+class NotificationMessageItem {
+  final String robotId;
+  final String organization;
+  final String title;
+  final String message;
+  final DateTime time;
+  final Map<String, dynamic>? extraData;
+
+  NotificationMessageItem({
+    required this.robotId,
+    required this.organization,
+    required this.title,
+    required this.message,
+    required this.time,
+    this.extraData,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'robotId': robotId,
+    'organization': organization,
+    'title': title,
+    'message': message,
+    'time': time.toIso8601String(),
+    'extraData': extraData,
+  };
+
+  factory NotificationMessageItem.fromJson(Map<String, dynamic> json) => NotificationMessageItem(
+    robotId: json['robotId'] ?? '',
+    organization: json['organization'] ?? '',
+    title: json['title'] ?? '',
+    message: json['message'] ?? '',
+    time: json['time'] != null ? DateTime.parse(json['time']) : DateTime.now(),
+    extraData: json['extraData'] != null ? Map<String, dynamic>.from(json['extraData']) : null,
+  );
+}
+

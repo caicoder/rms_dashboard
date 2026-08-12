@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:universal_platform/universal_platform.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -25,8 +27,13 @@ import 'flame/robot_map_game.dart';
 
 class RobotDetailPage extends StatefulWidget {
   final String robotId;
+  final bool autoShowTodeskDialog;
 
-  const RobotDetailPage({Key? key, required this.robotId}) : super(key: key);
+  const RobotDetailPage({
+    Key? key,
+    required this.robotId,
+    this.autoShowTodeskDialog = false,
+  }) : super(key: key);
 
   @override
   State<RobotDetailPage> createState() => _RobotDetailPageState();
@@ -338,10 +345,176 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     });
   }
 
+  Map<String, dynamic>? _todeskConfig;
+
+  static const Map<String, String> _todeskFieldLabels = {
+    'clientid': '设备代码 (Client ID)',
+    'loginphone': '登录手机号',
+    'loginemail': '登录邮箱',
+    'version': 'ToDesk版本',
+    'resolution': '屏幕分辨率',
+    'areacode': '国家/地区代码',
+    'lastpushtimeex': '最后推送时间',
+    'updatepasstime': '密码更新时间',
+    'presetdialogupdatedate': '预设弹窗更新日期',
+    'downloadtimes': '下载时间/次数',
+    'logintype': '登录类型',
+    'isopentemppass': '开启临时密码',
+    'autolockscreen': '自动锁屏',
+    'privatescreenlockscreen': '隐私屏锁屏',
+    'isadmissioncontrol': '准入控制',
+    'isupdate': '是否有新版本更新',
+    'weakpasswordtip': '弱密码提示',
+    'passupdate': '密码更新标记',
+    'updatetemppassdefault': '默认更新临时密码',
+    'user': '用户名',
+    'pluginexpiresdays': '插件过期天数',
+    'presetdialogshowcount': '预设弹窗显示次数',
+    'isfirstconnect': '首次连接标记',
+    'updatefrequencypromptbubble': '更新频率气泡提示',
+    'language': '语言编码',
+    'tempauthpassex': '临时授权密码',
+    'token': 'Token',
+    'newtoken': 'New Token',
+    'privatedata': '私有数据',
+  };
+
   @override
   void initState() {
     super.initState();
     _initMap();
+    _checkTodeskConfig();
+  }
+
+  Future<void> _checkTodeskConfig() async {
+    final config = await robotController.getTodeskConfig(widget.robotId);
+    if (config != null) {
+      robotController.todeskConfigs[widget.robotId] = config;
+      robotController.todeskConfigs.refresh();
+      if (mounted) {
+        setState(() {
+          _todeskConfig = config;
+        });
+        if (widget.autoShowTodeskDialog) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showTodeskDetailDialog(context, config);
+          });
+        }
+      }
+    }
+  }
+
+  Future<void> _launchTodesk(String clientId) async {
+    final uriString = 'todesk://connect&$clientId&huaxi123';
+    print('Launching ToDesk scheme: $uriString');
+    try {
+      if (UniversalPlatform.isMacOS) {
+        await Process.run('open', [uriString]);
+        ToastUtil.show('正在调起 ToDesk 连接: $clientId');
+      } else if (UniversalPlatform.isWindows) {
+        await Process.run('cmd', ['/c', 'start', '', uriString]);
+        ToastUtil.show('正在调起 ToDesk 连接: $clientId');
+      } else {
+        ToastUtil.show('仅支持 macOS / Windows 端调起 ToDesk');
+      }
+    } catch (e) {
+      print('Error launching ToDesk: $e');
+      ToastUtil.show('调起 ToDesk 失败: $e');
+    }
+  }
+
+  void _showTodeskDetailDialog(BuildContext context, Map<String, dynamic> config) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final entries = config.entries.toList();
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.lightBlueAccent.withOpacity(0.3)),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.desktop_windows_rounded, color: Color(0xFF0284C7), size: 24),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'ToDesk 配置详情 (SN: ${widget.robotId})',
+                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 550,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: entries.map((entry) {
+                  final key = entry.key;
+                  final val = entry.value?.toString() ?? '';
+                  final chineseLabel = _todeskFieldLabels[key.toLowerCase()] ?? key;
+                  final isImportant = key.toLowerCase() == 'clientid' || key.toLowerCase() == 'loginphone' || key.toLowerCase() == 'version';
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isImportant ? Colors.lightBlueAccent.withOpacity(0.1) : Colors.white.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(8),
+                      border: isImportant ? Border.all(color: Colors.lightBlueAccent.withOpacity(0.3)) : null,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 180,
+                          child: Text(
+                            chineseLabel,
+                            style: TextStyle(
+                              color: isImportant ? Colors.lightBlueAccent : Colors.white70,
+                              fontWeight: isImportant ? FontWeight.bold : FontWeight.w500,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: SelectableText(
+                            val,
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          actions: [
+            if (config['clientid'] != null)
+              TextButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: config['clientid'].toString()));
+                  ToastUtil.show('ClientID 已复制到剪贴板');
+                },
+                icon: const Icon(Icons.copy_rounded, size: 16, color: Colors.lightBlueAccent),
+                label: const Text('复制 ClientID', style: TextStyle(color: Colors.lightBlueAccent)),
+              ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF334155),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('关闭'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _initMap() async {
@@ -431,29 +604,56 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
         elevation: 0,
         actions: [
           Obx(() {
-
-
             final robotIndex = robotController.robots.indexWhere((r) => r.id == widget.robotId);
             if (robotIndex < 0) return const SizedBox();
             final robot = robotController.robots[robotIndex];
-            return !HuaxiUtil.isLogn ? const SizedBox() : Padding(
+            final todeskConfig = robotController.todeskConfigs[widget.robotId] ?? _todeskConfig;
+
+            return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3B82F6),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+                  if (todeskConfig != null && (todeskConfig['clientid']?.toString().isNotEmpty ?? false)) ...[
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0284C7),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        elevation: 2,
                       ),
-                      elevation: 2,
+                      icon: const Icon(Icons.desktop_windows_rounded, size: 18),
+                      label: const Text('ToDesk', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                      onPressed: () {
+                        final clientId = todeskConfig['clientid']?.toString() ?? '';
+                        if (clientId.isNotEmpty) {
+                          _launchTodesk(clientId);
+                        } else {
+                          ToastUtil.show('ToDesk clientid 为空');
+                        }
+                      },
+                      onLongPress: () {
+                        _showTodeskDetailDialog(context, todeskConfig);
+                      },
                     ),
-                    icon: const Icon(Icons.videocam_rounded, size: 18),
-                    label: const Text('查看监控', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                    onPressed: () => _startMonitoring(robot),
-                  ),
+                    const SizedBox(width: 10),
+                  ],
+                  if (HuaxiUtil.isLogn)
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF3B82F6),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        elevation: 2,
+                      ),
+                      icon: const Icon(Icons.videocam_rounded, size: 18),
+                      label: const Text('查看监控', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                      onPressed: () => _startMonitoring(robot),
+                    ),
                 ],
               ),
             );
@@ -1295,6 +1495,69 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
                     hint: '请描述清楚问题',
                     subtype: 3,
                   ),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              _buildCommandSection('📡 MQTT 系统指令', [
+                _CommandItem(
+                  icon: Icons.my_location_rounded,
+                  title: '触发主动定位',
+                  subtitle: '触发机器主动定位，结果自动推送钉钉群消息',
+                  color: Colors.cyanAccent,
+                  onTap: () => _sendCommand(robot.id, '触发主动定位', {
+                    'cmdId': 9,
+                    'version': 2,
+                    'timeTag': DateTime.now().millisecondsSinceEpoch,
+                    'body': {'type': '5'},
+                  }),
+                ),
+                _CommandItem(
+                  icon: Icons.map_rounded,
+                  title: '上传地图文件至COS',
+                  subtitle: '上传 map.pgm、map.yaml 文件至腾讯COS',
+                  color: Colors.greenAccent,
+                  onTap: () => _sendCommand(robot.id, '上传地图文件至COS', {
+                    'cmdId': 9,
+                    'version': 2,
+                    'timeTag': DateTime.now().millisecondsSinceEpoch,
+                    'body': {'type': '6'},
+                  }),
+                ),
+                _CommandItem(
+                  icon: Icons.alt_route_rounded,
+                  title: '上传导航点位至COS',
+                  subtitle: '上传 web_waypoints.yaml 文件至COS点位目录',
+                  color: Colors.orangeAccent,
+                  onTap: () => _sendCommand(robot.id, '上传导航点位至COS', {
+                    'cmdId': 9,
+                    'version': 2,
+                    'timeTag': DateTime.now().millisecondsSinceEpoch,
+                    'body': {'type': '7'},
+                  }),
+                ),
+                _CommandItem(
+                  icon: Icons.cloud_upload_rounded,
+                  title: '上报本地导航点位',
+                  subtitle: '触发本地导航点位上报业务服务端',
+                  color: Colors.lightBlueAccent,
+                  onTap: () => _sendCommand(robot.id, '上报本地导航点位', {
+                    'cmdId': 9,
+                    'version': 2,
+                    'timeTag': DateTime.now().millisecondsSinceEpoch,
+                    'body': {'type': '8'},
+                  }),
+                ),
+                _CommandItem(
+                  icon: Icons.desktop_windows_rounded,
+                  title: '读取 ToDesk 远程配置',
+                  subtitle: '读取本地 ToDesk 远程配置，成功后通过 MQTT 上报服务端',
+                  color: Colors.purpleAccent,
+                  onTap: () => _sendCommand(robot.id, '读取ToDesk远程配置', {
+                    'cmdId': 9,
+                    'version': 2,
+                    'timeTag': DateTime.now().millisecondsSinceEpoch,
+                    'body': {'type': '9'},
+                  }),
                 ),
               ]),
               const SizedBox(height: 16),

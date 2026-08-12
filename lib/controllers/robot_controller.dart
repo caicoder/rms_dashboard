@@ -1,21 +1,26 @@
 import 'dart:convert';
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../config/notification_helper.dart';
 import '../models/robot_model.dart';
+import '../views/details/robot_detail_page.dart';
 import 'mqtt_controller.dart';
 
 class RobotController extends GetxController {
   var robots = <RobotModel>[].obs;
   final Map<String, RobotModel> _robotsMap = {};
   var activeAlarms = <ActiveAlarmItem>[].obs;
+  var notifications = <NotificationMessageItem>[].obs;
+  var todeskConfigs = <String, Map<String, dynamic>>{}.obs;
   
   var searchQuery = ''.obs; // 搜索关键字
   var selectedTypeFilter = (-1).obs; // -1 表示全部，>=0 表示按 type 筛选
   var isAlarmsCollapsed = false.obs; // 告警面板是否收起
+  var selectedRightTab = 0.obs; // 右侧面板Tab: 0-告警, 1-通知
   
   final AudioPlayer _audioPlayer = AudioPlayer(); // 音频播放器
   
@@ -113,6 +118,21 @@ class RobotController extends GetxController {
       if (alarmsJsonList != null) {
         activeAlarms.value = alarmsJsonList.map((e) => ActiveAlarmItem.fromJson(jsonDecode(e))).toList();
       }
+      final List<String>? notifJsonList = prefs.getStringList('notifications_list');
+      if (notifJsonList != null) {
+        notifications.value = notifJsonList.map((e) => NotificationMessageItem.fromJson(jsonDecode(e))).toList();
+      }
+      for (var key in prefs.getKeys()) {
+        if (key.startsWith('todesk_config_')) {
+          String sn = key.replaceFirst('todesk_config_', '');
+          String? jsonStr = prefs.getString(key);
+          if (jsonStr != null && jsonStr.isNotEmpty) {
+            try {
+              todeskConfigs[sn] = Map<String, dynamic>.from(jsonDecode(jsonStr));
+            } catch (_) {}
+          }
+        }
+      }
     } catch (e) {
       print('Exception in _loadRobots: $e');
     } finally {
@@ -128,6 +148,7 @@ class RobotController extends GetxController {
 
     // 1. 清理 activeAlarms 中非当天的告警
     activeAlarms.removeWhere((alarm) => alarm.time.isBefore(startOfToday));
+    notifications.removeWhere((item) => item.time.isBefore(startOfToday));
 
     // 2. 清理各设备中的轨迹、巡逻、告警、健康监测历史数据
     for (var robot in robots) {
@@ -154,6 +175,8 @@ class RobotController extends GetxController {
     await prefs.setStringList('deleted_robots', _deletedRobots.toList());
     final List<String> alarmsJsonList = activeAlarms.map((e) => jsonEncode(e.toJson())).toList();
     await prefs.setStringList('active_alarms', alarmsJsonList);
+    final List<String> notifJsonList = notifications.map((e) => jsonEncode(e.toJson())).toList();
+    await prefs.setStringList('notifications_list', notifJsonList);
   }
 
   void addRobotBySn(String sn, String organization, {bool showSnackbar = true}) {
@@ -494,6 +517,205 @@ class RobotController extends GetxController {
       robot.lastUpdated = DateTime.now();
       robots.refresh();
       saveRobots();
+    }
+  }
+
+  /// 保存 ToDesk 配置信息到本地 database (SharedPreferences)，Key 为 sn
+  Future<void> saveTodeskConfig(String sn, Map<String, dynamic> params) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = jsonEncode(params);
+      await prefs.setString('todesk_config_$sn', jsonStr);
+      todeskConfigs[sn] = Map<String, dynamic>.from(params);
+      todeskConfigs.refresh();
+      print('Successfully saved ToDesk config for SN: $sn');
+
+      // 查找机构名称
+      String orgName = '';
+      var robot = _robotsMap[sn];
+      if (robot != null && robot.organization.isNotEmpty) {
+        orgName = robot.organization;
+      } else if (robot != null && robot.name.isNotEmpty) {
+        orgName = robot.name;
+      } else {
+        orgName = '设备 $sn';
+      }
+
+      // 通知 某某机构 Todesk 配置上传
+      final notificationItem = NotificationMessageItem(
+        robotId: sn,
+        organization: orgName,
+        title: 'ToDesk 配置上传',
+        message: '$orgName Todesk 配置上传',
+        time: DateTime.now(),
+        extraData: params,
+      );
+
+      notifications.add(notificationItem);
+      if (notifications.length > 100) {
+        notifications.removeAt(0);
+      }
+      notifications.refresh();
+      saveRobots();
+
+      _showLocalNotification('Todesk 配置上传', '$orgName Todesk 配置上传');
+
+      // 立刻显示弹窗提醒
+      Get.dialog(
+        AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.lightBlueAccent.withOpacity(0.3)),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.desktop_windows_rounded, color: Color(0xFF0284C7), size: 24),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '$orgName ToDesk 配置上传',
+                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('设备 SN: $sn', style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.lightBlueAccent.withOpacity(0.2)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text('设备代码 (ClientID): ', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                          Expanded(
+                            child: SelectableText(
+                              params['clientid']?.toString() ?? '未获取',
+                              style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 14, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (params['loginphone'] != null && params['loginphone'].toString().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text('登录手机号: ${params['loginphone']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      ],
+                      if (params['loginemail'] != null && params['loginemail'].toString().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text('登录邮箱: ${params['loginemail']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      ],
+                      if (params['version'] != null && params['version'].toString().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text('ToDesk 版本: ${params['version']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+              icon: const Icon(Icons.open_in_new_rounded, size: 16, color: Colors.white),
+              label: const Text('前往设备详情', style: TextStyle(color: Colors.white)),
+              onPressed: () {
+                Get.back();
+                Get.to(() => RobotDetailPage(robotId: sn, autoShowTodeskDialog: true));
+              },
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF334155)),
+              onPressed: () => Get.back(),
+              child: const Text('关闭', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      print('Error saving ToDesk config: $e');
+    }
+  }
+
+  /// 获取指定 SN 的 ToDesk 配置
+  Future<Map<String, dynamic>?> getTodeskConfig(String sn) async {
+    if (todeskConfigs.containsKey(sn)) {
+      return todeskConfigs[sn];
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('todesk_config_$sn');
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        final map = Map<String, dynamic>.from(jsonDecode(jsonStr));
+        todeskConfigs[sn] = map;
+        return map;
+      }
+    } catch (e) {
+      print('Error getting ToDesk config for $sn: $e');
+    }
+    return null;
+  }
+
+  /// 处理地图/点位等更新通知，添加到通知列表
+  void addMapUpdateNotification(String sn, Map<String, dynamic> params) {
+    try {
+      String rawMsg = params['msg']?.toString() ?? '地图更新成功';
+      
+      // 查找机构名称
+      String orgName = '';
+      var robot = _robotsMap[sn];
+      if (robot != null && robot.organization.isNotEmpty) {
+        orgName = robot.organization;
+      } else if (robot != null && robot.name.isNotEmpty) {
+        orgName = robot.name;
+      } else {
+        orgName = '设备 $sn';
+      }
+
+      String title = '$orgName 地图更新成功';
+      String message = '$orgName $rawMsg';
+
+      final notificationItem = NotificationMessageItem(
+        robotId: sn,
+        organization: orgName,
+        title: title,
+        message: message,
+        time: DateTime.now(),
+        extraData: params,
+      );
+
+      notifications.add(notificationItem);
+      if (notifications.length > 100) {
+        notifications.removeAt(0);
+      }
+      notifications.refresh();
+      saveRobots();
+
+      _showLocalNotification('🗺️ 地图更新成功', '$orgName $rawMsg');
+
+      Get.snackbar(
+        '🗺️ 地图更新成功',
+        '$orgName $rawMsg',
+        snackPosition: SnackPosition.TOP,
+        backgroundColor: const Color(0xFF065F46),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 5),
+      );
+    } catch (e) {
+      print('Error adding map update notification: $e');
     }
   }
 

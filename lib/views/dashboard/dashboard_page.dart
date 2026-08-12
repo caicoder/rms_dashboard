@@ -805,14 +805,20 @@ class DashboardPage extends StatelessWidget {
 
   Widget _buildFloatingAlarmList(BuildContext context, List<ActiveAlarmItem> alarms) {
     final isCollapsed = robotController.isAlarmsCollapsed.value;
+    final selectedTab = robotController.selectedRightTab.value;
+    final notifications = robotController.notifications;
+
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B).withOpacity(0.85),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.redAccent.withOpacity(0.4), width: 1.5),
+        border: Border.all(
+          color: selectedTab == 0 ? Colors.redAccent.withOpacity(0.4) : Colors.blueAccent.withOpacity(0.4),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.redAccent.withOpacity(0.1),
+            color: selectedTab == 0 ? Colors.redAccent.withOpacity(0.1) : Colors.blueAccent.withOpacity(0.1),
             blurRadius: 20,
             spreadRadius: 2,
           ),
@@ -830,166 +836,361 @@ class DashboardPage extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Header
+              // Header with Tabs
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: selectedTab == 0 ? Colors.redAccent.withOpacity(0.1) : Colors.blueAccent.withOpacity(0.1),
                   border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.ring_volume_rounded, color: Colors.redAccent, size: 20),
-                    const SizedBox(width: 10),
-                    Text(
-                      isCollapsed ? '告警' : '实时告警监控',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.redAccent,
-                        borderRadius: BorderRadius.circular(10),
+                child: isCollapsed
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            selectedTab == 0 ? Icons.ring_volume_rounded : Icons.notifications_active_rounded,
+                            color: selectedTab == 0 ? Colors.redAccent : Colors.blueAccent,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            selectedTab == 0 ? '告警' : '通知',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(width: 8),
+                          TvFocusHelper(
+                            onTap: () {
+                              robotController.isAlarmsCollapsed.value = !robotController.isAlarmsCollapsed.value;
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            focusColor: Colors.white30,
+                            child: const Padding(
+                              padding: EdgeInsets.all(4.0),
+                              child: Icon(Icons.keyboard_arrow_left_rounded, color: Colors.white70, size: 18),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          // Tab 1: 告警
+                          InkWell(
+                            onTap: () {
+                              robotController.selectedRightTab.value = 0;
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: selectedTab == 0 ? Colors.redAccent.withOpacity(0.25) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                border: selectedTab == 0 ? Border.all(color: Colors.redAccent.withOpacity(0.5)) : null,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.ring_volume_rounded, color: selectedTab == 0 ? Colors.redAccent : Colors.white60, size: 15),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '告警',
+                                    style: TextStyle(
+                                      color: selectedTab == 0 ? Colors.white : Colors.white60,
+                                      fontWeight: selectedTab == 0 ? FontWeight.bold : FontWeight.normal,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: selectedTab == 0 ? Colors.redAccent : Colors.white24,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '${alarms.length}',
+                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          // Tab 2: 通知
+                          InkWell(
+                            onTap: () {
+                              robotController.selectedRightTab.value = 1;
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: selectedTab == 1 ? Colors.blueAccent.withOpacity(0.25) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                border: selectedTab == 1 ? Border.all(color: Colors.blueAccent.withOpacity(0.5)) : null,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.notifications_active_rounded, color: selectedTab == 1 ? Colors.blueAccent : Colors.white60, size: 15),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '通知',
+                                    style: TextStyle(
+                                      color: selectedTab == 1 ? Colors.white : Colors.white60,
+                                      fontWeight: selectedTab == 1 ? FontWeight.bold : FontWeight.normal,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: selectedTab == 1 ? Colors.blueAccent : Colors.white24,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '${notifications.length}',
+                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          // Collapse Button
+                          TvFocusHelper(
+                            onTap: () {
+                              robotController.isAlarmsCollapsed.value = !robotController.isAlarmsCollapsed.value;
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            focusColor: Colors.white30,
+                            child: const Padding(
+                              padding: EdgeInsets.all(4.0),
+                              child: Icon(Icons.keyboard_arrow_right_rounded, color: Colors.white70, size: 20),
+                            ),
+                          ),
+                        ],
                       ),
-                      child: Text(
-                        '${alarms.length}',
-                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Collapse/Expand Button
-                    TvFocusHelper(
-                      onTap: () {
-                        robotController.isAlarmsCollapsed.value = !robotController.isAlarmsCollapsed.value;
-                      },
-                      borderRadius: BorderRadius.circular(8),
-                      focusColor: Colors.redAccent,
-                      child: Padding(
-                        padding: const EdgeInsets.all(4.0),
-                        child: Icon(
-                          isCollapsed 
-                              ? Icons.keyboard_arrow_left_rounded 
-                              : Icons.keyboard_arrow_right_rounded,
-                          color: Colors.white70,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ),
               
-              // Alarms List
+              // List Content
               if (!isCollapsed)
                 Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: alarms.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      // Reverse to show newest at the top
-                      final alarm = alarms[alarms.length - 1 - index];
-                      final timeStr = DateFormat('HH:mm:ss').format(alarm.time);
-                      
-                      return Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.03),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white.withOpacity(0.05)),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: TvFocusHelper(
-                                onTap: () {
-                                  Get.to(() => RobotDetailPage(robotId: alarm.robotId));
-                                },
-                                borderRadius: BorderRadius.circular(12),
-                                focusColor: Colors.redAccent,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(4.0),
-                                  child: Column(
+                  child: selectedTab == 0
+                      // 告警列表
+                      ? (alarms.isEmpty
+                          ? const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(20.0),
+                                child: Text('暂无告警数据', style: TextStyle(color: Colors.white38, fontSize: 13)),
+                              ),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.all(12),
+                              itemCount: alarms.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final alarm = alarms[alarms.length - 1 - index];
+                                final timeStr = DateFormat('HH:mm:ss').format(alarm.time);
+                                
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.03),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.white.withOpacity(0.05)),
+                                  ),
+                                  child: Row(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        alarm.organization,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w500),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'SN: ${alarm.robotId}',
-                                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.redAccent.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
-                                        ),
-                                        child: Text(
-                                          alarm.alarmTitle,
-                                          style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
-                                        ),
-                                      ),
-                                      if (alarm.imgUrl != null && alarm.imgUrl!.isNotEmpty) ...[
-                                        const SizedBox(height: 8),
-                                        GestureDetector(
+                                      Expanded(
+                                        child: TvFocusHelper(
                                           onTap: () {
-                                            _showLargeImageDialog(context, alarm.imgUrl!);
+                                            Get.to(() => RobotDetailPage(robotId: alarm.robotId));
                                           },
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(8),
-                                            child: Image.network(
-                                              alarm.imgUrl!.startsWith('http') ? alarm.imgUrl! : 'https://huaxi-1330823579.cos.ap-shanghai.myqcloud.com/robot' + alarm.imgUrl!.trim(),
-                                              width: 120,
-                                              height: 80,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                                          borderRadius: BorderRadius.circular(12),
+                                          focusColor: Colors.redAccent,
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(4.0),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  alarm.organization,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w500),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  'SN: ${alarm.robotId}',
+                                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.redAccent.withOpacity(0.1),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
+                                                  ),
+                                                  child: Text(
+                                                    alarm.alarmTitle,
+                                                    style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
+                                                  ),
+                                                ),
+                                                if (alarm.imgUrl != null && alarm.imgUrl!.isNotEmpty) ...[
+                                                  const SizedBox(height: 8),
+                                                  GestureDetector(
+                                                    onTap: () {
+                                                      _showLargeImageDialog(context, alarm.imgUrl!);
+                                                    },
+                                                    child: ClipRRect(
+                                                      borderRadius: BorderRadius.circular(8),
+                                                      child: Image.network(
+                                                        alarm.imgUrl!.startsWith('http') ? alarm.imgUrl! : 'https://huaxi-1330823579.cos.ap-shanghai.myqcloud.com/robot' + alarm.imgUrl!.trim(),
+                                                        width: 120,
+                                                        height: 80,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                                const SizedBox(height: 6),
+                                                Row(
+                                                  children: [
+                                                    const Icon(Icons.access_time_rounded, color: Colors.white30, size: 12),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      timeStr,
+                                                      style: const TextStyle(color: Colors.white30, fontSize: 11),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ),
-                                      ],
-                                      const SizedBox(height: 6),
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.access_time_rounded, color: Colors.white30, size: 12),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            timeStr,
-                                            style: const TextStyle(color: Colors.white30, fontSize: 11),
-                                          ),
-                                        ],
+                                      ),
+                                      const SizedBox(width: 8),
+                                      TvFocusHelper(
+                                        onTap: () {
+                                          robotController.removeActiveAlarm(alarm);
+                                        },
+                                        borderRadius: BorderRadius.circular(8),
+                                        focusColor: Colors.redAccent,
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(4.0),
+                                          child: Icon(Icons.close, color: Colors.white54, size: 16),
+                                        ),
                                       ),
                                     ],
                                   ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            // Close button to remove
-                            TvFocusHelper(
-                              onTap: () {
-                                robotController.removeActiveAlarm(alarm);
+                                );
                               },
-                              borderRadius: BorderRadius.circular(8),
-                              focusColor: Colors.redAccent,
-                              child: const Padding(
-                                padding: EdgeInsets.all(4.0),
-                                child: Icon(Icons.close, color: Colors.white54, size: 16),
+                            ))
+                      // 通知列表 (Todesk 配置上传等消息)
+                      : (notifications.isEmpty
+                          ? const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(20.0),
+                                child: Text('暂无通知数据', style: TextStyle(color: Colors.white38, fontSize: 13)),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.all(12),
+                              itemCount: notifications.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final item = notifications[notifications.length - 1 - index];
+                                final timeStr = DateFormat('HH:mm:ss').format(item.time);
+
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.03),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.blueAccent.withOpacity(0.2)),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: TvFocusHelper(
+                                          onTap: () {
+                                            Get.to(() => RobotDetailPage(robotId: item.robotId, autoShowTodeskDialog: true));
+                                          },
+                                          borderRadius: BorderRadius.circular(12),
+                                          focusColor: Colors.blueAccent,
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(4.0),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text(
+                                                        item.organization.isNotEmpty ? item.organization : '设备 ${item.robotId}',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                        style: const TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      timeStr,
+                                                      style: const TextStyle(color: Colors.white30, fontSize: 11),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'SN: ${item.robotId}',
+                                                  style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.blueAccent.withOpacity(0.12),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+                                                  ),
+                                                  child: Text(
+                                                    item.title,
+                                                    style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 12, fontWeight: FontWeight.w600),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                 Text(
+                                                   item.message,
+                                                   style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                                 ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      TvFocusHelper(
+                                        onTap: () {
+                                          robotController.notifications.removeAt(notifications.length - 1 - index);
+                                          robotController.notifications.refresh();
+                                          robotController.saveRobots();
+                                        },
+                                        borderRadius: BorderRadius.circular(8),
+                                        focusColor: Colors.blueAccent,
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(4.0),
+                                          child: Icon(Icons.close, color: Colors.white54, size: 16),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            )),
                 ),
             ],
           ),
