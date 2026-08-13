@@ -489,26 +489,30 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
         ToastUtil.show('正在调起 ToDesk 连接: $clientId');
       } else if (UniversalPlatform.isWindows) {
         bool launched = false;
-        
-        // 尝试 1: cmd /c start "" "todesk://..." (带双引号包裹，防止 & 符被 Windows cmd 解析截断)
-        try {
-          final res = await Process.run('cmd', ['/c', 'start', '', '"$uriString"']);
-          if (res.exitCode == 0) launched = true;
-        } catch (e) {
-          print('CMD launch failed: $e');
-        }
 
-        // 尝试 2: explorer.exe 原生调起协议
-        if (!launched) {
-          try {
-            final res = await Process.run('explorer', [uriString]);
-            if (res.exitCode == 0) launched = true;
-          } catch (e) {
-            print('Explorer launch failed: $e');
+        // 优先尝试 1: 检索 Windows 默认物理安装路径直接启动 ToDesk.exe 并传参 (最稳定，无弹窗)
+        final localAppData = Platform.environment['LOCALAPPDATA'] ?? '';
+        final appData = Platform.environment['APPDATA'] ?? '';
+        final possiblePaths = [
+          r'C:\Program Files (x86)\ToDesk\ToDesk.exe',
+          r'C:\Program Files\ToDesk\ToDesk.exe',
+          if (localAppData.isNotEmpty) '$localAppData\\ToDesk\\ToDesk.exe',
+          if (appData.isNotEmpty) '$appData\\ToDesk\\ToDesk.exe',
+        ];
+        for (var exePath in possiblePaths) {
+          if (File(exePath).existsSync()) {
+            try {
+              await Process.start(exePath, ['-connect', clientId, '-password', 'huaxi123']);
+              launched = true;
+              print('Successfully launched ToDesk via exe path: $exePath');
+              break;
+            } catch (e) {
+              print('Direct EXE launch failed: $e');
+            }
           }
         }
 
-        // 尝试 3: powershell Start-Process
+        // 尝试 2: PowerShell Start-Process 原生调起协议 (处理 URL 协议最规范，不会被误认为文件路径)
         if (!launched) {
           try {
             final res = await Process.run('powershell', ['-Command', 'Start-Process "$uriString"']);
@@ -518,22 +522,24 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
           }
         }
 
-        // 尝试 4: 检索 Windows 默认物理安装路径直接启动 ToDesk.exe 并传参
+        // 尝试 3: explorer.exe 调起协议
         if (!launched) {
-          final localAppData = Platform.environment['LOCALAPPDATA'] ?? '';
-          final appData = Platform.environment['APPDATA'] ?? '';
-          final possiblePaths = [
-            r'C:\Program Files (x86)\ToDesk\ToDesk.exe',
-            r'C:\Program Files\ToDesk\ToDesk.exe',
-            if (localAppData.isNotEmpty) '$localAppData\\ToDesk\\ToDesk.exe',
-            if (appData.isNotEmpty) '$appData\\ToDesk\\ToDesk.exe',
-          ];
-          for (var exePath in possiblePaths) {
-            if (File(exePath).existsSync()) {
-              await Process.run(exePath, ['-connect', clientId, '-password', 'huaxi123']);
-              launched = true;
-              break;
-            }
+          try {
+            final res = await Process.run('explorer', [uriString]);
+            if (res.exitCode == 0) launched = true;
+          } catch (e) {
+            print('Explorer launch failed: $e');
+          }
+        }
+
+        // 尝试 4: cmd /c start (使用 ^ 转义 & 符，不添加整体双引号，防止 Windows cmd 误将其识别为本地文件路径)
+        if (!launched) {
+          try {
+            final escapedUri = uriString.replaceAll('&', '^&');
+            final res = await Process.run('cmd', ['/c', 'start', '', escapedUri]);
+            if (res.exitCode == 0) launched = true;
+          } catch (e) {
+            print('CMD launch failed: $e');
           }
         }
 
