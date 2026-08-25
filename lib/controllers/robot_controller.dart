@@ -402,34 +402,42 @@ class RobotController extends GetxController {
         // 2. 疑似停止不动检测：
         //    - type != 0 (非空闲状态)
         //    - taskList 全为 0 (如 [0,0,0,0,0])
-        //    - 与 2 分钟前 (或倒数第二个心跳) 距离小于 0.5 米
+        //    - 连续校验最近 5 分钟内的「所有心跳点」：
+        //      必须「全程所有点」与当前坐标距离均 < 0.5 米（排除中间曾运动离开、循环路线又绕回原点的误报）
         // ==========================================
         if (robot.type != 0 && (robot.taskList.isEmpty || robot.taskList.every((e) => e == 0))) {
-          TrajectoryPoint? comparePoint;
-          for (int i = traj.length - 2; i >= 0; i--) {
+          // 提取最近 5 分钟内 (300 秒内) 的所有历史轨迹心跳点
+          final List<TrajectoryPoint> recent5MinPoints = [];
+          for (int i = traj.length - 1; i >= 0; i--) {
             final diffSec = now.difference(traj[i].time).inSeconds;
-            if (diffSec >= 110) { // 约 2 分钟 (心跳默认1分钟一次，110秒涵盖倒数第2个心跳)
-              comparePoint = traj[i];
+            if (diffSec <= 300) {
+              recent5MinPoints.add(traj[i]);
+            } else {
               break;
             }
           }
 
-          if (comparePoint == null && traj.length >= 2) {
-            final diffSec = now.difference(traj[traj.length - 2].time).inSeconds;
-            if (diffSec >= 50) {
-              comparePoint = traj[traj.length - 2];
+          // 确保覆盖时间跨度达到约 5 分钟 (>= 260 秒) 或历史点数达到 5 条以上
+          final bool hasEnoughDuration = recent5MinPoints.isNotEmpty &&
+              (now.difference(recent5MinPoints.last.time).inSeconds >= 260 || recent5MinPoints.length >= 5);
+
+          if (hasEnoughDuration) {
+            // 逐一校验 5 分钟内的每一个历史心跳点：是否全部在当前位置 0.5 米范围内
+            bool isAllStuck = true;
+            for (var p in recent5MinPoints) {
+              final dx = robot.positionX - p.x;
+              final dy = robot.positionY - p.y;
+              final distance = sqrt(dx * dx + dy * dy);
+              if (distance >= 0.5) {
+                isAllStuck = false; // 期间曾运动离开过该区域，非静止卡住
+                break;
+              }
             }
-          }
 
-          if (comparePoint != null) {
-            final dx = robot.positionX - comparePoint.x;
-            final dy = robot.positionY - comparePoint.y;
-            final distance = sqrt(dx * dx + dy * dy);
-
-            if (distance < 0.5) {
+            if (isAllStuck) {
               final lastStuckAlert = _lastStuckNotifyTime[robot.id];
-              // 节流：同台设备每 3 分钟内最多提醒一次
-              if (lastStuckAlert == null || now.difference(lastStuckAlert).inMinutes >= 3) {
+              // 节流：同台设备每 5 分钟内最多提醒一次，避免频繁打扰
+              if (lastStuckAlert == null || now.difference(lastStuckAlert).inMinutes >= 5) {
                 _lastStuckNotifyTime[robot.id] = now;
                 final orgName = robot.organization.isNotEmpty ? robot.organization : '设备 ${robot.id}';
                 final taskName = _getTaskTypeName(robot.type);
