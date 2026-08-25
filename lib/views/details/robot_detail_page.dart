@@ -18,6 +18,7 @@ import '../../controllers/mqtt_controller.dart';
 import '../../utils/http_util.dart';
 import '../../utils/api_util.dart';
 import '../../utils/toast_util.dart';
+import '../../utils/todesk_helper.dart';
 import 'package:shengwang_rtc_engine/agora_rtc_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../controllers/auth_controller.dart';
@@ -463,8 +464,15 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
   }
 
   Future<void> _checkTodeskConfig() async {
-    final config = await robotController.getTodeskConfig(widget.robotId);
-    if (config != null) {
+    // 优先 1: 检查腾讯云 COS 链接是否存在配置
+    Map<String, dynamic>? config = await TodeskHelper.fetchTodeskConfig(widget.robotId);
+
+    // 降级 2: 如果云端不存在，再判断本地缓存/本地配置
+    if (config == null || config.isEmpty) {
+      config = await robotController.getTodeskConfig(widget.robotId);
+    }
+
+    if (config != null && config.isNotEmpty) {
       robotController.todeskConfigs[widget.robotId] = config;
       robotController.todeskConfigs.refresh();
       if (mounted) {
@@ -473,7 +481,7 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
         });
         if (widget.autoShowTodeskDialog) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _showTodeskDetailDialog(context, config);
+            _showTodeskDetailDialog(context, config!);
           });
         }
       }

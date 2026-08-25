@@ -9,6 +9,7 @@ import '../../controllers/robot_controller.dart';
 import '../../controllers/mqtt_controller.dart';
 import '../../controllers/dashboard_tab_controller.dart';
 import '../statistics/device_exception_report_page.dart';
+import '../alarm/alarm_events_page.dart';
 import '../../models/robot_model.dart';
 import '../widgets/tv_focus_helper.dart';
 import 'widgets/robot_card.dart';
@@ -307,14 +308,53 @@ class DashboardPage extends StatelessWidget {
                   selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   unselectedLabelStyle: const TextStyle(fontSize: 12),
                   type: BottomNavigationBarType.fixed,
-                  items: const [
-                    BottomNavigationBarItem(
+                  items: [
+                    const BottomNavigationBarItem(
                       icon: Icon(Icons.grid_view_rounded),
                       label: '设备监控',
                     ),
-                    BottomNavigationBarItem(
+                    const BottomNavigationBarItem(
                       icon: Icon(Icons.analytics_rounded),
                       label: '异常统计',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(Icons.crisis_alert_rounded),
+                          if (robotController.activeAlarms.isNotEmpty)
+                            Positioned(
+                              top: -4,
+                              right: -8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444),
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFEF4444).withOpacity(0.8),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
+                                constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                                child: Text(
+                                  robotController.activeAlarms.length > 99
+                                      ? '99+'
+                                      : '${robotController.activeAlarms.length}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      label: '告警中心',
                     ),
                   ],
                 ),
@@ -343,6 +383,7 @@ class DashboardPage extends StatelessWidget {
                           children: [
                             _buildDeviceMonitoringView(context, isLargeScreen),
                             DeviceExceptionReportPage(),
+                            const AlarmEventsPage(),
                           ],
                         ),
                       ),
@@ -355,6 +396,7 @@ class DashboardPage extends StatelessWidget {
                     children: [
                       _buildDeviceMonitoringView(context, isLargeScreen),
                       DeviceExceptionReportPage(),
+                      const AlarmEventsPage(),
                     ],
                   ),
                 ),
@@ -419,6 +461,16 @@ class DashboardPage extends StatelessWidget {
             title: '异常统计报表',
             icon: Icons.analytics_rounded,
           ),
+          const SizedBox(height: 12),
+
+          // Tab 2: 告警事件中心
+          Obx(() => _buildSidebarTabItem(
+                index: 2,
+                title: '告警事件中心',
+                icon: Icons.crisis_alert_rounded,
+                badgeCount: robotController.activeAlarms.length,
+                isAlarmBadge: true,
+              )),
 
           const Spacer(),
 
@@ -500,6 +552,7 @@ class DashboardPage extends StatelessWidget {
     required String title,
     required IconData icon,
     int? badgeCount,
+    bool isAlarmBadge = false,
   }) {
     return Obx(() {
       final isSelected = tabController.selectedTabIndex.value == index;
@@ -514,10 +567,18 @@ class DashboardPage extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFF3B82F6).withOpacity(0.2) : Colors.transparent,
+              color: isSelected
+                  ? (isAlarmBadge
+                      ? const Color(0xFFEF4444).withOpacity(0.2)
+                      : const Color(0xFF3B82F6).withOpacity(0.2))
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isSelected ? const Color(0xFF3B82F6).withOpacity(0.5) : Colors.transparent,
+                color: isSelected
+                    ? (isAlarmBadge
+                        ? const Color(0xFFEF4444).withOpacity(0.5)
+                        : const Color(0xFF3B82F6).withOpacity(0.5))
+                    : Colors.transparent,
               ),
             ),
             child: Stack(
@@ -527,7 +588,11 @@ class DashboardPage extends StatelessWidget {
                 Icon(
                   icon,
                   size: 24,
-                  color: isSelected ? const Color(0xFF60A5FA) : Colors.white60,
+                  color: isSelected
+                      ? (isAlarmBadge ? const Color(0xFFF87171) : const Color(0xFF60A5FA))
+                      : (isAlarmBadge && badgeCount != null && badgeCount > 0
+                          ? const Color(0xFFF87171)
+                          : Colors.white60),
                 ),
                 if (badgeCount != null && badgeCount > 0)
                   Positioned(
@@ -537,8 +602,17 @@ class DashboardPage extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                       constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF3B82F6),
+                        color: isAlarmBadge ? const Color(0xFFEF4444) : const Color(0xFF3B82F6),
                         borderRadius: BorderRadius.circular(8),
+                        boxShadow: isAlarmBadge
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFFEF4444).withOpacity(0.8),
+                                  blurRadius: 6,
+                                  spreadRadius: 1,
+                                )
+                              ]
+                            : null,
                       ),
                       child: Center(
                         child: Text(
@@ -560,11 +634,11 @@ class DashboardPage extends StatelessWidget {
                       width: 3,
                       height: 18,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF60A5FA),
+                        color: isAlarmBadge ? const Color(0xFFF87171) : const Color(0xFF60A5FA),
                         borderRadius: BorderRadius.circular(2),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF60A5FA).withOpacity(0.8),
+                            color: (isAlarmBadge ? const Color(0xFFF87171) : const Color(0xFF60A5FA)).withOpacity(0.8),
                             blurRadius: 4,
                           ),
                         ],
@@ -585,56 +659,37 @@ class DashboardPage extends StatelessWidget {
         _buildHeader(context, isLargeScreen),
         _buildSearchBar(context),
         Expanded(
-          child: Stack(
-            children: [
-              Obx(() {
-                final robots = robotController.filteredRobots;
-                if (robots.isEmpty) {
-                  return _buildEmptyState(
-                      isSearch: robotController.searchQuery.value.isNotEmpty ||
-                          robotController.selectedTypeFilter.value != -1);
-                }
+          child: Obx(() {
+            final robots = robotController.filteredRobots;
+            if (robots.isEmpty) {
+              return _buildEmptyState(
+                  isSearch: robotController.searchQuery.value.isNotEmpty ||
+                      robotController.selectedTypeFilter.value != -1);
+            }
 
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                  child: GridView.builder(
-                    physics: const BouncingScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 450, // 自动拉伸，最大宽度450
-                      crossAxisSpacing: 24,
-                      mainAxisSpacing: 24,
-                      childAspectRatio: 1.1, // 调整卡片的长宽比以自适应内容
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+              child: GridView.builder(
+                physics: const BouncingScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 450, // 自动拉伸，最大宽度450
+                  crossAxisSpacing: 24,
+                  mainAxisSpacing: 24,
+                  childAspectRatio: 1.1, // 调整卡片的长宽比以自适应内容
+                ),
+                itemCount: robots.length,
+                itemBuilder: (context, index) {
+                  return Hero(
+                    tag: 'robot_${robots[index].id}',
+                    child: RobotCard(
+                      key: ValueKey(robots[index].id),
+                      robot: robots[index],
                     ),
-                    itemCount: robots.length,
-                    itemBuilder: (context, index) {
-                      return Hero(
-                        tag: 'robot_${robots[index].id}',
-                        child: RobotCard(
-                          key: ValueKey(robots[index].id),
-                          robot: robots[index],
-                        ),
-                      );
-                    },
-                  ),
-                );
-              }),
-
-              // Floating Alarms Panel on the Right
-              Obx(() {
-                final alarms = robotController.activeAlarms;
-                if (alarms.isEmpty) return const SizedBox.shrink();
-
-                final isCollapsed = robotController.isAlarmsCollapsed.value;
-                return Positioned(
-                  top: 16,
-                  bottom: isCollapsed ? null : 16,
-                  right: 24,
-                  width: isCollapsed ? 200 : 320,
-                  child: _buildFloatingAlarmList(context, alarms),
-                );
-              }),
-            ],
-          ),
+                  );
+                },
+              ),
+            );
+          }),
         ),
       ],
     );

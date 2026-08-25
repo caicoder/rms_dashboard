@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../config/notification_helper.dart';
+import '../services/online_player.dart';
 import '../models/robot_model.dart';
 import '../views/details/robot_detail_page.dart';
 import 'mqtt_controller.dart';
@@ -16,6 +18,9 @@ class RobotController extends GetxController {
   var activeAlarms = <ActiveAlarmItem>[].obs;
   var notifications = <NotificationMessageItem>[].obs;
   var todeskConfigs = <String, Map<String, dynamic>>{}.obs;
+  
+  final Map<String, DateTime> _lastStuckNotifyTime = {};
+  final Map<String, DateTime> _lastEstopNotifyTime = {};
   
   var searchQuery = ''.obs; // 搜索关键字
   var selectedTypeFilter = (-1).obs; // -1 表示全部，>=0 表示按 type 筛选
@@ -262,9 +267,15 @@ class RobotController extends GetxController {
     var robot = _getOrAddRobot(id);
     if (robot == null) return;
 
+    final DateTime now = DateTime.now();
+
     robot.type = int.tryParse(data['type']?.toString() ?? '0') ?? 0;
     robot.status = int.tryParse(data['status']?.toString() ?? '1') ?? 1;
-    robot.eStop = data['eStop'] ?? false;
+
+    final bool prevEstop = robot.eStop;
+    final bool currentEstop = data['isEstop'] == true || data['eStop'] == true;
+    robot.eStop = currentEstop;
+
     robot.wifi88Status = int.tryParse(data['wifi88Status']?.toString() ?? '0') ?? 0;
     if (data.containsKey('upSsid')) {
       robot.upSsid = data['upSsid']?.toString() ?? '';
@@ -290,7 +301,6 @@ class RobotController extends GetxController {
         robot.positionX = double.tryParse(parts[0]) ?? 0.0;
         robot.positionY = double.tryParse(parts[1]) ?? 0.0;
         
-        DateTime now = DateTime.now();
         var newPoint = TrajectoryPoint(
           x: robot.positionX,
           y: robot.positionY,
@@ -322,15 +332,99 @@ class RobotController extends GetxController {
         if (traj.length > 2000) {
           traj.removeAt(0);
         }
+
+        // ==========================================
+        // 1. 急停触发检测：与上个心跳比对，如果新触发急停，发起本地通知与 TTS 语音播报
+        // ==========================================
+        if (!prevEstop && currentEstop) {
+          final lastEstopAlert = _lastEstopNotifyTime[robot.id];
+          if (lastEstopAlert == null || now.difference(lastEstopAlert).inSeconds >= 10) {
+            _lastEstopNotifyTime[robot.id] = now;
+            final orgName = robot.organization.isNotEmpty ? robot.organization : '设备 ${robot.id}';
+            final xStr = robot.positionX.toStringAsFixed(2);
+            final yStr = robot.positionY.toStringAsFixed(2);
+            final title = '$orgName 触发急停';
+            final body = '在 X: $xStr, Y: $yStr 触发急停';
+            final ttsText = '$orgName在坐标$xStr, $yStr触发急停';
+
+            NotificationHelper().showNotification(title, body);
+            OnlinePlayer.instance.playTTSWait(ttsText);
+
+            notifications.add(NotificationMessageItem(
+              robotId: robot.id,
+              organization: robot.organization,
+              title: title,
+              message: body,
+              time: now,
+            ));
+            saveRobots();
+          }
+        }
+
+        // ==========================================
+        // 2. 疑似停止不动检测：
+        //    - type != 0 (非空闲状态)
+        //    - taskList 全为 0 (如 [0,0,0,0,0])
+        //    - 与 2 分钟前 (或倒数第二个心跳) 距离小于 0.5 米
+        // ==========================================
+        if (robot.type != 0 && (robot.taskList.isEmpty || robot.taskList.every((e) => e == 0))) {
+          TrajectoryPoint? comparePoint;
+          for (int i = traj.length - 2; i >= 0; i--) {
+            final diffSec = now.difference(traj[i].time).inSeconds;
+            if (diffSec >= 110) { // 约 2 分钟 (心跳默认1分钟一次，110秒涵盖倒数第2个心跳)
+              comparePoint = traj[i];
+              break;
+            }
+          }
+
+          if (comparePoint == null && traj.length >= 2) {
+            final diffSec = now.difference(traj[traj.length - 2].time).inSeconds;
+            if (diffSec >= 50) {
+              comparePoint = traj[traj.length - 2];
+            }
+          }
+
+          if (comparePoint != null) {
+            final dx = robot.positionX - comparePoint.x;
+            final dy = robot.positionY - comparePoint.y;
+            final distance = sqrt(dx * dx + dy * dy);
+
+            if (distance < 0.5) {
+              final lastStuckAlert = _lastStuckNotifyTime[robot.id];
+              // 节流：同台设备每 3 分钟内最多提醒一次
+              if (lastStuckAlert == null || now.difference(lastStuckAlert).inMinutes >= 3) {
+                _lastStuckNotifyTime[robot.id] = now;
+                final orgName = robot.organization.isNotEmpty ? robot.organization : '设备 ${robot.id}';
+                final xStr = robot.positionX.toStringAsFixed(2);
+                final yStr = robot.positionY.toStringAsFixed(2);
+                final title = '$orgName 疑似停止不动 请及时处理 谢谢';
+                final body = '在 $xStr  $yStr  的坐标';
+                final ttsText = '$orgName疑似停止不动，在坐标$xStr, $yStr，请及时处理，谢谢';
+
+                NotificationHelper().showNotification(title, body);
+                OnlinePlayer.instance.playTTSWait(ttsText);
+
+                notifications.add(NotificationMessageItem(
+                  robotId: robot.id,
+                  organization: robot.organization,
+                  title: '$orgName 疑似停止不动',
+                  message: '在坐标 X: $xStr, Y: $yStr 移动距离小于0.5米',
+                  time: now,
+                ));
+                saveRobots();
+              }
+            }
+          }
+        }
       }
     }
 
-    robot.lastUpdated = DateTime.now();
+    robot.lastUpdated = now;
     
     // Throttle UI refresh to avoid lag on fast heartbeats
-    if (DateTime.now().difference(_lastRefreshTime).inMilliseconds > 500) {
+    if (now.difference(_lastRefreshTime).inMilliseconds > 500) {
       robots.refresh();
-      _lastRefreshTime = DateTime.now();
+      _lastRefreshTime = now;
     }
   }
 
@@ -740,6 +834,15 @@ class RobotController extends GetxController {
       if (!hasAnyFall) {
         r.hasFallAlarm = false;
       }
+    }
+    saveRobots();
+    robots.refresh();
+  }
+
+  void clearAllActiveAlarms() {
+    activeAlarms.clear();
+    for (var r in robots) {
+      r.hasFallAlarm = false;
     }
     saveRobots();
     robots.refresh();
