@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 import 'package:rms_dashboard/utils/huaxi_util.dart';
 import '../../controllers/robot_controller.dart';
 import '../../controllers/mqtt_controller.dart';
+import '../../controllers/dashboard_tab_controller.dart';
+import '../statistics/device_exception_report_page.dart';
 import '../../models/robot_model.dart';
 import '../widgets/tv_focus_helper.dart';
 import 'widgets/robot_card.dart';
@@ -23,6 +25,7 @@ class DashboardPage extends StatelessWidget {
 
   final RobotController robotController = Get.put(RobotController(), permanent: true);
   final MqttController mqttController = Get.put(MqttController(), permanent: true);
+  final DashboardTabController tabController = Get.put(DashboardTabController(), permanent: true);
   final TextEditingController _searchController = TextEditingController();
 
   void _showLoginDialog(BuildContext context) {
@@ -260,57 +263,62 @@ class DashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isLargeScreen = MediaQuery.of(context).size.width >= 768;
+
     return Scaffold(
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          // FloatingActionButton.extended(
-          //   heroTag: 'clear_all',
-          //   onPressed: () {
-          //     showDialog(
-          //       context: context,
-          //       builder: (context) => AlertDialog(
-          //         backgroundColor: const Color(0xFF1E293B),
-          //         title: const Text('清空缓存', style: TextStyle(color: Colors.redAccent)),
-          //         content: const Text('确定要清空所有设备缓存吗？这会彻底清除本地存储的所有 SN 和机构名称记录！', style: TextStyle(color: Colors.white70)),
-          //         actions: [
-          //           TextButton(
-          //             onPressed: () => Navigator.pop(context),
-          //             child: const Text('取消', style: TextStyle(color: Colors.white70)),
-          //           ),
-          //           ElevatedButton(
-          //             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-          //             onPressed: () {
-          //               robotController.clearAllRobots();
-          //               Navigator.pop(context);
-          //             },
-          //             child: const Text('确认清空', style: TextStyle(color: Colors.white)),
-          //           ),
-          //         ],
-          //       ),
-          //     );
-          //   },
-          //   icon: const Icon(Icons.delete_sweep_rounded, color: Colors.white),
-          //   label: const Text('清空缓存', style: TextStyle(color: Colors.white)),
-          //   backgroundColor: Colors.redAccent.withOpacity(0.8),
-          // ),
-          // const SizedBox(height: 16),
-          TvFocusHelper(
-            onTap: () => _showAddRobotDialog(context),
-            onLongPress: () => _showBatchAddDialog(context),
-            borderRadius: BorderRadius.circular(30),
-            focusColor: const Color(0xFF3B82F6),
-            child: FloatingActionButton.extended(
-              heroTag: 'add_device',
-              onPressed: () => _showAddRobotDialog(context),
-              icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white),
-              label: const Text('添加设备', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              backgroundColor: const Color(0xFF3B82F6),
+      floatingActionButton: Obx(() {
+        if (tabController.selectedTabIndex.value != 0) {
+          return const SizedBox.shrink();
+        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            TvFocusHelper(
+              onTap: () => _showAddRobotDialog(context),
+              onLongPress: () => _showBatchAddDialog(context),
+              borderRadius: BorderRadius.circular(30),
+              focusColor: const Color(0xFF3B82F6),
+              child: FloatingActionButton.extended(
+                heroTag: 'add_device',
+                onPressed: () => _showAddRobotDialog(context),
+                icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white),
+                label: const Text('添加设备', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                backgroundColor: const Color(0xFF3B82F6),
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        );
+      }),
+      bottomNavigationBar: isLargeScreen
+          ? null
+          : Obx(() => Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1))),
+                ),
+                child: BottomNavigationBar(
+                  currentIndex: tabController.selectedTabIndex.value,
+                  onTap: (index) => tabController.changeTab(index),
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  selectedItemColor: const Color(0xFF3B82F6),
+                  unselectedItemColor: Colors.white54,
+                  selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  unselectedLabelStyle: const TextStyle(fontSize: 12),
+                  type: BottomNavigationBarType.fixed,
+                  items: const [
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.grid_view_rounded),
+                      label: '设备监控',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.analytics_rounded),
+                      label: '异常统计',
+                    ),
+                  ],
+                ),
+              )),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -324,68 +332,315 @@ class DashboardPage extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              _buildHeader(context),
-              _buildSearchBar(context),
-              Expanded(
-                child: Stack(
+          child: isLargeScreen
+              ? Row(
                   children: [
-                    Obx(() {
-                      final robots = robotController.filteredRobots;
-                      if (robots.isEmpty) {
-                        return _buildEmptyState(isSearch: robotController.searchQuery.value.isNotEmpty || robotController.selectedTypeFilter.value != -1);
-                      }
-                      
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                        child: GridView.builder(
-                          physics: const BouncingScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 450, // 自动拉伸，最大宽度450
-                            crossAxisSpacing: 24,
-                            mainAxisSpacing: 24,
-                            childAspectRatio: 1.1, // 调整卡片的长宽比以自适应内容
-                          ),
-                          itemCount: robots.length,
-                          itemBuilder: (context, index) {
-                            return Hero(
-                              tag: 'robot_${robots[index].id}',
-                              child: RobotCard(
-                                key: ValueKey(robots[index].id),
-                                robot: robots[index],
-                              ),
-                            );
-                          },
+                    _buildLargeScreenSidebar(context),
+                    Expanded(
+                      child: Obx(
+                        () => IndexedStack(
+                          index: tabController.selectedTabIndex.value,
+                          children: [
+                            _buildDeviceMonitoringView(context, isLargeScreen),
+                            DeviceExceptionReportPage(),
+                          ],
                         ),
-                      );
-                    }),
-                    
-                    // Floating Alarms Panel on the Right
-                    Obx(() {
-                      final alarms = robotController.activeAlarms;
-                      if (alarms.isEmpty) return const SizedBox.shrink();
-                      
-                      final isCollapsed = robotController.isAlarmsCollapsed.value;
-                      return Positioned(
-                        top: 16,
-                        bottom: isCollapsed ? null : 16,
-                        right: 24,
-                        width: isCollapsed ? 200 : 320,
-                        child: _buildFloatingAlarmList(context, alarms),
-                      );
-                    }),
+                      ),
+                    ),
                   ],
+                )
+              : Obx(
+                  () => IndexedStack(
+                    index: tabController.selectedTabIndex.value,
+                    children: [
+                      _buildDeviceMonitoringView(context, isLargeScreen),
+                      DeviceExceptionReportPage(),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildLargeScreenSidebar(BuildContext context) {
+    return Container(
+      width: 64,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A).withOpacity(0.95),
+        border: Border(
+          right: BorderSide(color: Colors.white.withOpacity(0.08)),
+        ),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 16),
+          // Sidebar Logo (Icon only)
+          Tooltip(
+            message: '骅羲监控系统 (RMS Dashboard)',
+            preferBelow: false,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF3B82F6).withOpacity(0.4),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Icon(Icons.hub_rounded, color: Colors.white, size: 22),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Divider(height: 1, color: Colors.white.withOpacity(0.08), indent: 12, endIndent: 12),
+          const SizedBox(height: 16),
+
+          // Tab 0: 设备监控
+          Obx(() => _buildSidebarTabItem(
+                index: 0,
+                title: '设备监控',
+                icon: Icons.grid_view_rounded,
+                badgeCount: robotController.robots.length,
+              )),
+          const SizedBox(height: 12),
+
+          // Tab 1: 异常统计
+          _buildSidebarTabItem(
+            index: 1,
+            title: '异常统计报表',
+            icon: Icons.analytics_rounded,
+          ),
+
+          const Spacer(),
+
+          // MQTT Status Indicator (Compact)
+          Obx(() {
+            final isConnected = mqttController.connectionState.value == MqttConnectionState.connected;
+            final isRetrying = mqttController.isRetrying.value;
+            final tooltipMsg = isConnected
+                ? 'MQTT 连接正常'
+                : (isRetrying ? 'MQTT 正在重连...' : 'MQTT 已断开 (点击重连)');
+
+            return Tooltip(
+              message: tooltipMsg,
+              preferBelow: false,
+              child: InkWell(
+                onTap: isConnected ? null : () => mqttController.manualReconnect(),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: BoxDecoration(
+                    color: (isConnected ? Colors.green : Colors.red).withOpacity(0.15),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: (isConnected ? Colors.green : Colors.red).withOpacity(0.3),
+                    ),
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isConnected ? Colors.greenAccent : Colors.redAccent,
+                        boxShadow: [
+                          BoxShadow(
+                            color: (isConnected ? Colors.greenAccent : Colors.redAccent).withOpacity(0.8),
+                            blurRadius: 6,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+
+          // Account / User Login (Compact)
+          Tooltip(
+            message: '用户登录 / 账户设置',
+            preferBelow: false,
+            child: InkWell(
+              onTap: () => _showLoginDialog(context),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 40,
+                height: 40,
+                margin: const EdgeInsets.only(top: 4, bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(
+                  child: Icon(Icons.account_circle_outlined, size: 22, color: Colors.white70),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSidebarTabItem({
+    required int index,
+    required String title,
+    required IconData icon,
+    int? badgeCount,
+  }) {
+    return Obx(() {
+      final isSelected = tabController.selectedTabIndex.value == index;
+
+      return Tooltip(
+        message: title,
+        preferBelow: false,
+        child: InkWell(
+          onTap: () => tabController.changeTab(index),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFF3B82F6).withOpacity(0.2) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected ? const Color(0xFF3B82F6).withOpacity(0.5) : Colors.transparent,
+              ),
+            ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 24,
+                  color: isSelected ? const Color(0xFF60A5FA) : Colors.white60,
+                ),
+                if (badgeCount != null && badgeCount > 0)
+                  Positioned(
+                    top: 2,
+                    right: 2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3B82F6),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Center(
+                        child: Text(
+                          badgeCount > 99 ? '99+' : '$badgeCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                // Left active indicator pill
+                if (isSelected)
+                  Positioned(
+                    left: -4,
+                    child: Container(
+                      width: 3,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF60A5FA),
+                        borderRadius: BorderRadius.circular(2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF60A5FA).withOpacity(0.8),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _buildDeviceMonitoringView(BuildContext context, bool isLargeScreen) {
+    return Column(
+      children: [
+        _buildHeader(context, isLargeScreen),
+        _buildSearchBar(context),
+        Expanded(
+          child: Stack(
+            children: [
+              Obx(() {
+                final robots = robotController.filteredRobots;
+                if (robots.isEmpty) {
+                  return _buildEmptyState(
+                      isSearch: robotController.searchQuery.value.isNotEmpty ||
+                          robotController.selectedTypeFilter.value != -1);
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                  child: GridView.builder(
+                    physics: const BouncingScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 450, // 自动拉伸，最大宽度450
+                      crossAxisSpacing: 24,
+                      mainAxisSpacing: 24,
+                      childAspectRatio: 1.1, // 调整卡片的长宽比以自适应内容
+                    ),
+                    itemCount: robots.length,
+                    itemBuilder: (context, index) {
+                      return Hero(
+                        tag: 'robot_${robots[index].id}',
+                        child: RobotCard(
+                          key: ValueKey(robots[index].id),
+                          robot: robots[index],
+                        ),
+                      );
+                    },
+                  ),
+                );
+              }),
+
+              // Floating Alarms Panel on the Right
+              Obx(() {
+                final alarms = robotController.activeAlarms;
+                if (alarms.isEmpty) return const SizedBox.shrink();
+
+                final isCollapsed = robotController.isAlarmsCollapsed.value;
+                return Positioned(
+                  top: 16,
+                  bottom: isCollapsed ? null : 16,
+                  right: 24,
+                  width: isCollapsed ? 200 : 320,
+                  child: _buildFloatingAlarmList(context, alarms),
+                );
+              }),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, [bool isLargeScreen = false]) {
     bool isSmallScreen = MediaQuery.of(context).size.width < 600;
     
     return ClipRRect(
