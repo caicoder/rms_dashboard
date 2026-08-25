@@ -263,6 +263,43 @@ class RobotController extends GetxController {
     return _robotsMap[id];
   }
 
+  String _getTaskTypeName(int type) {
+    switch (type) {
+      case 1:
+        return '回充任务';
+      case 2:
+        return '建图任务';
+      case 3:
+        return '巡逻任务';
+      case 7:
+        return '代送任务';
+      case 9:
+      case 109:
+        return '前往招呼任务';
+      case 10:
+      case 110:
+        return '前往传话任务';
+      case 11:
+      case 111:
+        return '前往拿取任务';
+      case 12:
+      case 112:
+        return '前往告警任务';
+      case 13:
+      case 113:
+        return '广播任务';
+      case 14:
+      case 114:
+        return '导览任务';
+      case 115:
+        return '前往目标点任务';
+      case 116:
+        return '带路任务';
+      default:
+        return '任务';
+    }
+  }
+
   void updateHeartbeat(String id, Map<String, dynamic> data) {
     var robot = _getOrAddRobot(id);
     if (robot == null) return;
@@ -395,11 +432,12 @@ class RobotController extends GetxController {
               if (lastStuckAlert == null || now.difference(lastStuckAlert).inMinutes >= 3) {
                 _lastStuckNotifyTime[robot.id] = now;
                 final orgName = robot.organization.isNotEmpty ? robot.organization : '设备 ${robot.id}';
+                final taskName = _getTaskTypeName(robot.type);
                 final xStr = robot.positionX.toStringAsFixed(2);
                 final yStr = robot.positionY.toStringAsFixed(2);
-                final title = '$orgName 疑似停止不动 请及时处理 谢谢';
+                final title = '$orgName 在${taskName}中疑似停止不动 请及时处理 谢谢';
                 final body = '在 $xStr  $yStr  的坐标';
-                final ttsText = '$orgName疑似停止不动，在坐标$xStr, $yStr，请及时处理，谢谢';
+                final ttsText = '$orgName在${taskName}中疑似停止不动，在坐标$xStr, $yStr，请及时处理，谢谢';
 
                 NotificationHelper().showNotification(title, body);
                 OnlinePlayer.instance.playTTSWait(ttsText);
@@ -407,7 +445,7 @@ class RobotController extends GetxController {
                 notifications.add(NotificationMessageItem(
                   robotId: robot.id,
                   organization: robot.organization,
-                  title: '$orgName 疑似停止不动',
+                  title: '$orgName 在${taskName}中疑似停止不动',
                   message: '在坐标 X: $xStr, Y: $yStr 移动距离小于0.5米',
                   time: now,
                 ));

@@ -30,13 +30,20 @@ class _AlarmEventsPageState extends State<AlarmEventsPage> {
     super.dispose();
   }
 
-  String _getFullImageUrl(String? rawUrl) {
-    if (rawUrl == null || rawUrl.trim().isEmpty) return '';
-    final trimmed = rawUrl.trim();
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      return trimmed;
+  List<String> _getImageUrls(String? rawUrl) {
+    if (rawUrl == null || rawUrl.trim().isEmpty) return [];
+    final parts = rawUrl.split(RegExp(r'[,;]'));
+    final List<String> list = [];
+    for (var part in parts) {
+      final trimmed = part.trim();
+      if (trimmed.isEmpty) continue;
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        list.add(trimmed);
+      } else {
+        list.add('$_cosImagePrefix${trimmed.startsWith('/') ? '' : '/'}$trimmed');
+      }
     }
-    return '$_cosImagePrefix${trimmed.startsWith('/') ? '' : '/'}$trimmed';
+    return list;
   }
 
   Color _getAlarmColor(String title) {
@@ -55,211 +62,308 @@ class _AlarmEventsPageState extends State<AlarmEventsPage> {
 
   void _showLargeImageDialog(
     BuildContext context, {
-    required String fullUrl,
+    required List<String> imageUrls,
     required ActiveAlarmItem alarm,
+    int initialIndex = 0,
   }) {
+    if (imageUrls.isEmpty) return;
     final alarmColor = _getAlarmColor(alarm.alarmTitle);
     final timeStr = DateFormat('yyyy-MM-dd HH:mm:ss').format(alarm.time);
+    final PageController pageController = PageController(initialPage: initialIndex);
+    int activeIndex = initialIndex;
 
     showDialog(
       context: context,
       barrierColor: Colors.black.withOpacity(0.85),
       builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          child: Container(
-            constraints: const BoxConstraints(
-              maxWidth: 900,
-              maxHeight: 700,
-            ),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F172A).withOpacity(0.95),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: alarmColor.withOpacity(0.5), width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: alarmColor.withOpacity(0.25),
-                  blurRadius: 30,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Dialog Header
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B).withOpacity(0.8),
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(19)),
-                    border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: alarmColor.withOpacity(0.18),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: alarmColor.withOpacity(0.4)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(_getAlarmIcon(alarm.alarmTitle), size: 16, color: alarmColor),
-                            const SizedBox(width: 6),
-                            Text(
-                              alarm.alarmTitle,
-                              style: TextStyle(
-                                color: alarmColor,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'SN: ${alarm.robotId}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'monospace',
-                              ),
-                            ),
-                            if (alarm.organization.isNotEmpty)
-                              Text(
-                                alarm.organization,
-                                style: const TextStyle(color: Colors.white60, fontSize: 12),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
-                        ),
-                      ),
-                      Text(
-                        timeStr,
-                        style: const TextStyle(color: Colors.white54, fontSize: 12),
-                      ),
-                      const SizedBox(width: 12),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 24),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
-                ),
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final currentUrl = imageUrls[activeIndex];
 
-                // Large Image Viewport (Interactive Zoom/Pan)
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    alignment: Alignment.center,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: InteractiveViewer(
-                        minScale: 0.5,
-                        maxScale: 4.0,
-                        child: Image.network(
-                          fullUrl,
-                          fit: BoxFit.contain,
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            final percent = progress.expectedTotalBytes != null
-                                ? (progress.cumulativeBytesLoaded / progress.expectedTotalBytes!)
-                                : null;
-                            return Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  CircularProgressIndicator(
-                                    value: percent,
-                                    color: alarmColor,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  const Text(
-                                    '正在加载高清告警抓拍图像...',
-                                    style: TextStyle(color: Colors.white60, fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) => Center(
-                            child: Column(
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 950,
+                  maxHeight: 720,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A).withOpacity(0.95),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: alarmColor.withOpacity(0.5), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: alarmColor.withOpacity(0.25),
+                      blurRadius: 30,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Dialog Header
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B).withOpacity(0.8),
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(19)),
+                        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: alarmColor.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: alarmColor.withOpacity(0.4)),
+                            ),
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.broken_image_rounded, color: Colors.white38, size: 48),
-                                const SizedBox(height: 10),
-                                const Text(
-                                  '图片加载失败或已过期',
-                                  style: TextStyle(color: Colors.white54, fontSize: 13),
-                                ),
-                                const SizedBox(height: 8),
-                                SelectableText(
-                                  fullUrl,
-                                  style: const TextStyle(color: Colors.white30, fontSize: 11),
+                                Icon(_getAlarmIcon(alarm.alarmTitle), size: 16, color: alarmColor),
+                                const SizedBox(width: 6),
+                                Text(
+                                  alarm.alarmTitle,
+                                  style: TextStyle(
+                                    color: alarmColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'SN: ${alarm.robotId}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                                if (alarm.organization.isNotEmpty)
+                                  Text(
+                                    alarm.organization,
+                                    style: const TextStyle(color: Colors.white60, fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                              ],
+                            ),
+                          ),
+                          if (imageUrls.length > 1) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white24),
+                              ),
+                              child: Text(
+                                '${activeIndex + 1} / ${imageUrls.length}',
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                          ],
+                          Text(
+                            timeStr,
+                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                          ),
+                          const SizedBox(width: 12),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 24),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ),
 
-                // Dialog Footer
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B).withOpacity(0.8),
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(19)),
-                    border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
-                  ),
-                  child: Row(
-                    children: [
-                      const Text(
-                        '💡 提示：双指捏合或滚轮可自由放大/缩小查看现场细节',
-                        style: TextStyle(color: Colors.white38, fontSize: 12),
+                    // Large Image Viewport (Interactive Zoom/Pan + PageView with Navigation Arrows)
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          PageView.builder(
+                            controller: pageController,
+                            itemCount: imageUrls.length,
+                            onPageChanged: (idx) {
+                              setDialogState(() {
+                                activeIndex = idx;
+                              });
+                            },
+                            itemBuilder: (context, idx) {
+                              final url = imageUrls[idx];
+                              return Container(
+                                padding: const EdgeInsets.all(16),
+                                alignment: Alignment.center,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: InteractiveViewer(
+                                    minScale: 0.5,
+                                    maxScale: 4.0,
+                                    child: Image.network(
+                                      url,
+                                      fit: BoxFit.contain,
+                                      loadingBuilder: (context, child, progress) {
+                                        if (progress == null) return child;
+                                        final percent = progress.expectedTotalBytes != null
+                                            ? (progress.cumulativeBytesLoaded / progress.expectedTotalBytes!)
+                                            : null;
+                                        return Center(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              CircularProgressIndicator(
+                                                value: percent,
+                                                color: alarmColor,
+                                              ),
+                                              const SizedBox(height: 12),
+                                              const Text(
+                                                '正在加载高清告警抓拍图像...',
+                                                style: TextStyle(color: Colors.white60, fontSize: 12),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                      errorBuilder: (context, error, stackTrace) => Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.broken_image_rounded, color: Colors.white38, size: 48),
+                                            const SizedBox(height: 10),
+                                            const Text(
+                                              '图片加载失败或已过期',
+                                              style: TextStyle(color: Colors.white54, fontSize: 13),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            SelectableText(
+                                              url,
+                                              style: const TextStyle(color: Colors.white30, fontSize: 11),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+
+                          // Left navigation arrow button
+                          if (imageUrls.length > 1 && activeIndex > 0)
+                            Positioned(
+                              left: 20,
+                              top: 0,
+                              bottom: 0,
+                              child: Center(
+                                child: InkWell(
+                                  onTap: () {
+                                    pageController.previousPage(
+                                      duration: const Duration(milliseconds: 300),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(24),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.6),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white24),
+                                    ),
+                                    child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                          // Right navigation arrow button
+                          if (imageUrls.length > 1 && activeIndex < imageUrls.length - 1)
+                            Positioned(
+                              right: 20,
+                              top: 0,
+                              bottom: 0,
+                              child: Center(
+                                child: InkWell(
+                                  onTap: () {
+                                    pageController.nextPage(
+                                      duration: const Duration(milliseconds: 300),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(24),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.6),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white24),
+                                    ),
+                                    child: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 20),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                      const Spacer(),
-                      TextButton.icon(
-                        onPressed: () {
-                          Clipboard.setData(ClipboardData(text: fullUrl));
-                          ToastUtil.show('图片链接已复制到剪贴板');
-                        },
-                        icon: const Icon(Icons.link_rounded, size: 16, color: Color(0xFF38BDF8)),
-                        label: const Text('复制图片链接', style: TextStyle(color: Color(0xFF38BDF8))),
+                    ),
+
+                    // Dialog Footer
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B).withOpacity(0.8),
+                        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(19)),
+                        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
                       ),
-                      const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0284C7),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          Get.to(() => RobotDetailPage(robotId: alarm.robotId));
-                        },
-                        icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                        label: const Text('前往设备详情'),
+                      child: Row(
+                        children: [
+                          const Text(
+                            '💡 提示：双指捏合或滚轮可自由放大/缩小查看现场细节',
+                            style: TextStyle(color: Colors.white38, fontSize: 12),
+                          ),
+                          const Spacer(),
+                          TextButton.icon(
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: currentUrl));
+                              ToastUtil.show('图片链接已复制到剪贴板');
+                            },
+                            icon: const Icon(Icons.link_rounded, size: 16, color: Color(0xFF38BDF8)),
+                            label: const Text('复制图片链接', style: TextStyle(color: Color(0xFF38BDF8))),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0284C7),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              Get.to(() => RobotDetailPage(robotId: alarm.robotId));
+                            },
+                            icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                            label: const Text('前往设备详情'),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -618,8 +722,9 @@ class _AlarmEventsPageState extends State<AlarmEventsPage> {
     final alarmColor = _getAlarmColor(alarm.alarmTitle);
     final iconData = _getAlarmIcon(alarm.alarmTitle);
     final timeStr = DateFormat('HH:mm:ss').format(alarm.time);
-    final fullImageUrl = _getFullImageUrl(alarm.imgUrl);
-    final hasImage = fullImageUrl.isNotEmpty;
+    final imageUrls = _getImageUrls(alarm.imgUrl);
+    final hasImage = imageUrls.isNotEmpty;
+    final firstImageUrl = hasImage ? imageUrls.first : '';
 
     return Container(
       decoration: BoxDecoration(
@@ -733,8 +838,9 @@ class _AlarmEventsPageState extends State<AlarmEventsPage> {
                         onTap: () {
                           _showLargeImageDialog(
                             context,
-                            fullUrl: fullImageUrl,
+                            imageUrls: imageUrls,
                             alarm: alarm,
+                            initialIndex: 0,
                           );
                         },
                         borderRadius: BorderRadius.circular(10),
@@ -744,7 +850,7 @@ class _AlarmEventsPageState extends State<AlarmEventsPage> {
                             fit: StackFit.expand,
                             children: [
                               Image.network(
-                                fullImageUrl,
+                                firstImageUrl,
                                 fit: BoxFit.cover,
                                 loadingBuilder: (context, child, progress) {
                                   if (progress == null) return child;
@@ -776,6 +882,31 @@ class _AlarmEventsPageState extends State<AlarmEventsPage> {
                                   ),
                                 ),
                               ),
+                              // Multi-photo count badge (if > 1)
+                              if (imageUrls.length > 1)
+                                Positioned(
+                                  top: 6,
+                                  left: 6,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.7),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: Colors.white24),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.photo_library_rounded, size: 11, color: Colors.white70),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          '共 ${imageUrls.length} 张',
+                                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               // Hover / Tap overlay indicator
                               Positioned(
                                 right: 6,
