@@ -9,6 +9,8 @@ import 'package:audioplayers/audioplayers.dart';
 import '../config/notification_helper.dart';
 import '../services/online_player.dart';
 import '../models/robot_model.dart';
+import '../models/docking_notification_model.dart';
+import '../models/anomaly_notification_model.dart';
 import '../views/details/robot_detail_page.dart';
 import 'mqtt_controller.dart';
 
@@ -17,6 +19,8 @@ class RobotController extends GetxController {
   final Map<String, RobotModel> _robotsMap = {};
   var activeAlarms = <ActiveAlarmItem>[].obs;
   var notifications = <NotificationMessageItem>[].obs;
+  var dockingNotifications = <DockingNotificationItem>[].obs;
+  var anomalyNotifications = <AnomalyNotificationItem>[].obs;
   var todeskConfigs = <String, Map<String, dynamic>>{}.obs;
   
   final Map<String, DateTime> _lastStuckNotifyTime = {};
@@ -127,6 +131,14 @@ class RobotController extends GetxController {
       if (notifJsonList != null) {
         notifications.value = notifJsonList.map((e) => NotificationMessageItem.fromJson(jsonDecode(e))).toList();
       }
+      final List<String>? dockingJsonList = prefs.getStringList('docking_notifications_list');
+      if (dockingJsonList != null) {
+        dockingNotifications.value = dockingJsonList.map((e) => DockingNotificationItem.fromJson(jsonDecode(e))).toList();
+      }
+      final List<String>? anomalyJsonList = prefs.getStringList('anomaly_notifications_list');
+      if (anomalyJsonList != null) {
+        anomalyNotifications.value = anomalyJsonList.map((e) => AnomalyNotificationItem.fromJson(jsonDecode(e))).toList();
+      }
       for (var key in prefs.getKeys()) {
         if (key.startsWith('todesk_config_')) {
           String sn = key.replaceFirst('todesk_config_', '');
@@ -154,6 +166,7 @@ class RobotController extends GetxController {
     // 1. 清理 activeAlarms 中非当天的告警
     activeAlarms.removeWhere((alarm) => alarm.time.isBefore(startOfToday));
     notifications.removeWhere((item) => item.time.isBefore(startOfToday));
+    anomalyNotifications.removeWhere((item) => item.time.isBefore(startOfToday));
 
     // 2. 清理各设备中的轨迹、巡逻、告警、健康监测历史数据
     for (var robot in robots) {
@@ -182,6 +195,10 @@ class RobotController extends GetxController {
     await prefs.setStringList('active_alarms', alarmsJsonList);
     final List<String> notifJsonList = notifications.map((e) => jsonEncode(e.toJson())).toList();
     await prefs.setStringList('notifications_list', notifJsonList);
+    final List<String> dockingJsonList = dockingNotifications.map((e) => jsonEncode(e.toJson())).toList();
+    await prefs.setStringList('docking_notifications_list', dockingJsonList);
+    final List<String> anomalyJsonList = anomalyNotifications.map((e) => jsonEncode(e.toJson())).toList();
+    await prefs.setStringList('anomaly_notifications_list', anomalyJsonList);
   }
 
   void addRobotBySn(String sn, String organization, {bool showSnackbar = true}) {
@@ -394,6 +411,20 @@ class RobotController extends GetxController {
               message: body,
               time: now,
             ));
+
+            // [新增业务] 添加到异常通知列表（区分不同SN和机构）
+            addAnomalyNotification(AnomalyNotificationItem(
+              id: 'estop_${now.millisecondsSinceEpoch}_${robot.id}',
+              robotId: robot.id,
+              organization: robot.organization.isNotEmpty ? robot.organization : '未知机构',
+              title: title,
+              message: body,
+              type: AnomalyType.estop,
+              time: now,
+              positionX: robot.positionX,
+              positionY: robot.positionY,
+            ));
+
             saveRobots();
           }
         }
@@ -457,6 +488,21 @@ class RobotController extends GetxController {
                   message: '在坐标 X: $xStr, Y: $yStr 移动距离小于0.5米',
                   time: now,
                 ));
+
+                // [新增业务] 添加到异常通知列表（区分不同SN和机构）
+                addAnomalyNotification(AnomalyNotificationItem(
+                  id: 'stuck_${now.millisecondsSinceEpoch}_${robot.id}',
+                  robotId: robot.id,
+                  organization: robot.organization.isNotEmpty ? robot.organization : '未知机构',
+                  title: '$orgName 在${taskName}中疑似停止不动',
+                  message: '在坐标 X: $xStr, Y: $yStr 连续 5 分钟移动距离小于 0.5 米',
+                  type: AnomalyType.stuck,
+                  time: now,
+                  positionX: robot.positionX,
+                  positionY: robot.positionY,
+                  taskName: taskName,
+                ));
+
                 saveRobots();
               }
             }
@@ -919,4 +965,120 @@ class RobotController extends GetxController {
       return 0; // 其他情况保持原有顺序
     });
   }
+
+  /// 处理 cmdId == 88 的充电对桩超时上报
+  void handleCmd88Notification(String sn, Map<String, dynamic> data) {
+    try {
+      final body = (data['body'] is Map) ? Map<String, dynamic>.from(data['body']) : <String, dynamic>{};
+
+      // 解析 reason
+      String reason = '';
+      if (body['reason'] != null && body['reason'].toString().trim().isNotEmpty) {
+        reason = body['reason'].toString().trim();
+      } else if (body['params'] is Map && body['params']['reason'] != null && body['params']['reason'].toString().trim().isNotEmpty) {
+        reason = body['params']['reason'].toString().trim();
+      } else {
+        reason = '充电对桩超时';
+      }
+
+      // 解析 taskId
+      String taskId = '';
+      if (body['taskId'] != null) {
+        taskId = body['taskId'].toString();
+      } else if (body['params'] is Map && body['params']['taskId'] != null) {
+        taskId = body['params']['taskId'].toString();
+      }
+
+      // 解析 type & subtype
+      String type = body['type']?.toString() ?? '2';
+      int subtype = body['subtype'] is int ? body['subtype'] : int.tryParse(body['subtype']?.toString() ?? '1') ?? 1;
+
+      // 解析时间戳
+      int? timeTag = data['timeTag'] is int ? data['timeTag'] : int.tryParse(data['timeTag']?.toString() ?? '');
+      DateTime time = (timeTag != null && timeTag > 0)
+          ? DateTime.fromMillisecondsSinceEpoch(timeTag * 1000)
+          : DateTime.now();
+
+      // 查找机构名称
+      String orgName = '';
+      var robot = _robotsMap[sn];
+      if (robot != null && robot.organization.isNotEmpty) {
+        orgName = robot.organization;
+      } else if (robot != null && robot.name.isNotEmpty) {
+        orgName = robot.name;
+      } else {
+        orgName = '设备 $sn';
+      }
+
+      final notificationItem = DockingNotificationItem(
+        id: '${DateTime.now().millisecondsSinceEpoch}_$sn',
+        sn: sn,
+        organization: orgName,
+        reason: reason,
+        taskId: taskId,
+        type: type,
+        subtype: subtype,
+        time: time,
+        rawData: data,
+      );
+
+      dockingNotifications.insert(0, notificationItem);
+      if (dockingNotifications.length > 200) {
+        dockingNotifications.removeLast();
+      }
+      dockingNotifications.refresh();
+      saveRobots();
+
+      _showLocalNotification('充电对桩超时通知', '$orgName: $reason');
+    } catch (e) {
+      print('handleCmd88Notification error: $e');
+    }
+  }
+
+  void removeDockingNotification(String id) {
+    dockingNotifications.removeWhere((item) => item.id == id);
+    dockingNotifications.refresh();
+    saveRobots();
+  }
+
+  void clearDockingNotifications() {
+    dockingNotifications.clear();
+    dockingNotifications.refresh();
+    saveRobots();
+  }
+
+  /// [新增业务] 添加异常通知（急停/疑似停止不动）
+  void addAnomalyNotification(AnomalyNotificationItem item) {
+    anomalyNotifications.insert(0, item);
+    if (anomalyNotifications.length > 300) {
+      anomalyNotifications.removeLast();
+    }
+    anomalyNotifications.refresh();
+    saveRobots();
+  }
+
+  /// [新增业务] 一键清除所有异常通知
+  void clearAllAnomalyNotifications() {
+    anomalyNotifications.clear();
+    anomalyNotifications.refresh();
+    saveRobots();
+  }
+
+  /// [新增业务] 清除指定机构的全部异常通知
+  void clearAnomalyNotificationsByOrg(String orgName) {
+    anomalyNotifications.removeWhere((item) {
+      final itemOrg = item.organization.isNotEmpty ? item.organization : '未知机构';
+      return itemOrg == orgName;
+    });
+    anomalyNotifications.refresh();
+    saveRobots();
+  }
+
+  /// [新增业务] 删除单条异常通知
+  void removeAnomalyNotification(String id) {
+    anomalyNotifications.removeWhere((item) => item.id == id);
+    anomalyNotifications.refresh();
+    saveRobots();
+  }
 }
+

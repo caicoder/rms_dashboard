@@ -228,8 +228,9 @@ class MqttController extends GetxController with WidgetsBindingObserver {
         if (cmdId == 1) {
           robotController.updateHeartbeat(sn, body);
         } else if (cmdId == 88) {
+          robotController.handleCmd88Notification(sn, Map<String, dynamic>.from(data));
           var params = body['params'];
-          if (params != null && params is Map) {
+          if (params != null && params is Map && params.containsKey('client_id')) {
             robotController.saveTodeskConfig(sn, Map<String, dynamic>.from(params));
           }
         } else if (cmdId == 9) {

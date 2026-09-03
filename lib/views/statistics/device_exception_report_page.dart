@@ -184,7 +184,7 @@ class DeviceExceptionReportPage extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            '设备异常情况上报统计（最终版）',
+                            '设备异常情况上报统计',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,

@@ -36,7 +36,7 @@ class DeviceReportController extends GetxController {
     receiveTimeout: const Duration(seconds: 15),
   ));
 
-  static const String _apiEndpoint = 'http://192.168.1.141:8888/monitor/dashboard';
+  static const String _apiEndpoint = 'https://prod-api.huaxiai.com.cn/monitor/dashboard';
   static const String _apiPassword = 'hx@082000X';
 
   @override

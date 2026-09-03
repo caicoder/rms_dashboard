@@ -10,6 +10,8 @@ import '../../controllers/mqtt_controller.dart';
 import '../../controllers/dashboard_tab_controller.dart';
 import '../statistics/device_exception_report_page.dart';
 import '../alarm/alarm_events_page.dart';
+import '../notifications/docking_notification_page.dart';
+import '../notifications/anomaly_notification_page.dart';
 import '../../models/robot_model.dart';
 import '../widgets/tv_focus_helper.dart';
 import 'widgets/robot_card.dart';
@@ -356,6 +358,84 @@ class DashboardPage extends StatelessWidget {
                       ),
                       label: '告警中心',
                     ),
+                    BottomNavigationBarItem(
+                      icon: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(Icons.ev_station_rounded),
+                          if (robotController.dockingNotifications.isNotEmpty)
+                            Positioned(
+                              top: -4,
+                              right: -8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF59E0B),
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFF59E0B).withOpacity(0.8),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
+                                constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                                child: Text(
+                                  robotController.dockingNotifications.length > 99
+                                      ? '99+'
+                                      : '${robotController.dockingNotifications.length}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      label: '对桩通知',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(Icons.notification_important_rounded),
+                          if (robotController.anomalyNotifications.isNotEmpty)
+                            Positioned(
+                              top: -4,
+                              right: -8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444),
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFEF4444).withOpacity(0.8),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
+                                constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                                child: Text(
+                                  robotController.anomalyNotifications.length > 99
+                                      ? '99+'
+                                      : '${robotController.anomalyNotifications.length}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      label: '异常预警',
+                    ),
                   ],
                 ),
               )),
@@ -384,6 +464,8 @@ class DashboardPage extends StatelessWidget {
                             _buildDeviceMonitoringView(context, isLargeScreen),
                             DeviceExceptionReportPage(),
                             const AlarmEventsPage(),
+                            const DockingNotificationPage(),
+                            const AnomalyNotificationPage(),
                           ],
                         ),
                       ),
@@ -397,6 +479,8 @@ class DashboardPage extends StatelessWidget {
                       _buildDeviceMonitoringView(context, isLargeScreen),
                       DeviceExceptionReportPage(),
                       const AlarmEventsPage(),
+                      const DockingNotificationPage(),
+                      const AnomalyNotificationPage(),
                     ],
                   ),
                 ),
@@ -470,6 +554,26 @@ class DashboardPage extends StatelessWidget {
                 icon: Icons.crisis_alert_rounded,
                 badgeCount: robotController.activeAlarms.length,
                 isAlarmBadge: true,
+              )),
+          const SizedBox(height: 12),
+
+          // Tab 3: 充电对桩通知
+          Obx(() => _buildSidebarTabItem(
+                index: 3,
+                title: '充电对桩通知',
+                icon: Icons.ev_station_rounded,
+                badgeCount: robotController.dockingNotifications.length,
+                badgeColor: const Color(0xFFF59E0B),
+              )),
+          const SizedBox(height: 12),
+
+          // Tab 4: 设备异常预警（急停/疑似停滞）
+          Obx(() => _buildSidebarTabItem(
+                index: 4,
+                title: '设备异常预警 (急停/停滞)',
+                icon: Icons.notification_important_rounded,
+                badgeCount: robotController.anomalyNotifications.length,
+                badgeColor: const Color(0xFFEF4444),
               )),
 
           const Spacer(),
@@ -553,6 +657,7 @@ class DashboardPage extends StatelessWidget {
     required IconData icon,
     int? badgeCount,
     bool isAlarmBadge = false,
+    Color? badgeColor,
   }) {
     return Obx(() {
       final isSelected = tabController.selectedTabIndex.value == index;
@@ -602,12 +707,12 @@ class DashboardPage extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                       constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
                       decoration: BoxDecoration(
-                        color: isAlarmBadge ? const Color(0xFFEF4444) : const Color(0xFF3B82F6),
+                        color: badgeColor ?? (isAlarmBadge ? const Color(0xFFEF4444) : const Color(0xFF3B82F6)),
                         borderRadius: BorderRadius.circular(8),
-                        boxShadow: isAlarmBadge
+                        boxShadow: (badgeColor != null || isAlarmBadge)
                             ? [
                                 BoxShadow(
-                                  color: const Color(0xFFEF4444).withOpacity(0.8),
+                                  color: (badgeColor ?? const Color(0xFFEF4444)).withOpacity(0.8),
                                   blurRadius: 6,
                                   spreadRadius: 1,
                                 )
@@ -634,11 +739,11 @@ class DashboardPage extends StatelessWidget {
                       width: 3,
                       height: 18,
                       decoration: BoxDecoration(
-                        color: isAlarmBadge ? const Color(0xFFF87171) : const Color(0xFF60A5FA),
+                        color: badgeColor ?? (isAlarmBadge ? const Color(0xFFF87171) : const Color(0xFF60A5FA)),
                         borderRadius: BorderRadius.circular(2),
                         boxShadow: [
                           BoxShadow(
-                            color: (isAlarmBadge ? const Color(0xFFF87171) : const Color(0xFF60A5FA)).withOpacity(0.8),
+                            color: (badgeColor ?? (isAlarmBadge ? const Color(0xFFF87171) : const Color(0xFF60A5FA))).withOpacity(0.8),
                             blurRadius: 4,
                           ),
                         ],
