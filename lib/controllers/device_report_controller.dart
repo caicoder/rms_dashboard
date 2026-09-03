@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:get/get.dart' hide Response;
 import 'package:intl/intl.dart';
-import 'dashboard_tab_controller.dart';
+import 'robot_controller.dart';
 import '../models/dashboard_stats_model.dart';
 import '../utils/log_util.dart';
 import '../utils/toast_util.dart';
@@ -27,7 +26,6 @@ class DeviceReportController extends GetxController {
 
   final Rx<DashboardStatsModel?> reportData = Rx<DashboardStatsModel?>(null);
 
-  Timer? _autoRefreshTimer;
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
   final DateFormat _dayFormat = DateFormat('yyyy-MM-dd');
 
@@ -44,64 +42,6 @@ class DeviceReportController extends GetxController {
     super.onInit();
     _applyDimension(TimeDimension.today, fetchImmediately: false);
     fetchData();
-    _setupTabListener();
-    _checkAndStartTimer();
-  }
-
-  @override
-  void onClose() {
-    _stopAutoRefreshTimer();
-    super.onClose();
-  }
-
-  void _setupTabListener() {
-    try {
-      if (Get.isRegistered<DashboardTabController>()) {
-        final tabController = Get.find<DashboardTabController>();
-        ever(tabController.selectedTabIndex, (int index) {
-          if (index == 1) {
-            // 切入异常统计页面
-            _checkAndStartTimer();
-          } else {
-            // 切出异常统计页面（如设备监控Tab），立即停止定时器
-            _stopAutoRefreshTimer();
-          }
-        });
-      }
-    } catch (_) {}
-  }
-
-  bool get _isTabActive {
-    try {
-      if (Get.isRegistered<DashboardTabController>()) {
-        return Get.find<DashboardTabController>().selectedTabIndex.value == 1;
-      }
-    } catch (_) {}
-    return true;
-  }
-
-  void _checkAndStartTimer() {
-    _stopAutoRefreshTimer();
-    if (_isTabActive && selectedDimension.value == TimeDimension.today) {
-      _startAutoRefreshTimer();
-    }
-  }
-
-  void _startAutoRefreshTimer() {
-    _stopAutoRefreshTimer();
-    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
-      if (_isTabActive && selectedDimension.value == TimeDimension.today) {
-        debugPrint('[DeviceReportController] 触发今日数据 1 分钟自动刷新...');
-        fetchData(isAutoRefresh: true);
-      } else {
-        _stopAutoRefreshTimer();
-      }
-    });
-  }
-
-  void _stopAutoRefreshTimer() {
-    _autoRefreshTimer?.cancel();
-    _autoRefreshTimer = null;
   }
 
   void setDimension(TimeDimension dimension) {
@@ -109,14 +49,12 @@ class DeviceReportController extends GetxController {
       return;
     }
     _applyDimension(dimension, fetchImmediately: true);
-    _checkAndStartTimer();
   }
 
   void setCustomRange(DateTime start, DateTime end) {
     selectedDimension.value = TimeDimension.custom;
     startDate.value = DateTime(start.year, start.month, start.day, 0, 0, 0);
     endDate.value = DateTime(end.year, end.month, end.day, 23, 59, 59);
-    _stopAutoRefreshTimer();
     fetchData();
   }
 
@@ -190,6 +128,16 @@ class DeviceReportController extends GetxController {
           if (rawData is Map<String, dynamic>) {
             reportData.value = DashboardStatsModel.fromJson(rawData);
             lastUpdateTime.value = DateTime.now();
+
+            // 同步接口拉取的 SN 列表至首页机器人列表并订阅
+            try {
+              if (Get.isRegistered<RobotController>() && reportData.value != null) {
+                Get.find<RobotController>().syncRobotsFromApi(reportData.value!.statisticsList);
+              }
+            } catch (e) {
+              LogUtil.e('[DeviceReportController] 同步SN列表到RobotController失败: $e');
+            }
+
             if (isManual) {
               ToastUtil.show('数据刷新成功');
             }

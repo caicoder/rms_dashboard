@@ -157,6 +157,11 @@ class MqttController extends GetxController with WidgetsBindingObserver {
       // Cancel old subscription before creating new one
       _messageSubscription?.cancel();
       _messageSubscription = client!.updates!.listen(_onMessageReceived);
+
+      // 为已有的机器人依次执行主题订阅
+      for (var r in robotController.robots) {
+        subscribeToRobot(r.id);
+      }
     } else {
       connectionState.value = MqttConnectionState.disconnected;
       _scheduleReconnect();
@@ -282,11 +287,19 @@ class MqttController extends GetxController with WidgetsBindingObserver {
   }
 
   void subscribeToRobot(String sn) {
-    // Wildcard subscription already covers all SNs
+    if (client?.connectionStatus?.state == MqttConnectionState.connected && sn.trim().isNotEmpty) {
+      final cleanSn = sn.trim();
+      client!.subscribe('HuaXi/01/01/huaxi001/D/P/$cleanSn', MqttQos.atLeastOnce);
+      client!.subscribe('HuaXi/01/01/huaxi001/D/U/$cleanSn', MqttQos.atLeastOnce);
+    }
   }
 
   void unsubscribeFromRobot(String sn) {
-    // Wildcard subscription covers all; just remove locally
+    if (client?.connectionStatus?.state == MqttConnectionState.connected && sn.trim().isNotEmpty) {
+      final cleanSn = sn.trim();
+      client!.unsubscribe('HuaXi/01/01/huaxi001/D/P/$cleanSn');
+      client!.unsubscribe('HuaXi/01/01/huaxi001/D/U/$cleanSn');
+    }
   }
 
   // =========================

@@ -723,6 +723,106 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     super.dispose();
   }
 
+  void _showEditRemarkDialog(BuildContext context, RobotModel robot) {
+    final TextEditingController remarkController = TextEditingController(text: robot.organization);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.white.withOpacity(0.1)),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3B82F6).withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.edit_note_rounded, color: Color(0xFF60A5FA), size: 20),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              '修改设备备注名',
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '设备 SN: ${robot.id}',
+              style: const TextStyle(color: Colors.white54, fontSize: 13, fontFamily: 'monospace'),
+            ),
+            if (robot.deviceName.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                '默认接口名称: ${robot.deviceName}',
+                style: const TextStyle(color: Colors.white38, fontSize: 12),
+              ),
+            ],
+            const SizedBox(height: 16),
+            TextField(
+              controller: remarkController,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                labelText: '备注名称 (存储在 organization)',
+                labelStyle: const TextStyle(color: Colors.white60),
+                hintText: '输入自定义备注名...',
+                hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.04),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFF3B82F6)),
+                ),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.clear, color: Colors.white38, size: 18),
+                  onPressed: () => remarkController.clear(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '提示：优先展示备注名。若清空备注名，将自动显示接口默认名称。',
+              style: TextStyle(color: Colors.white38, fontSize: 11),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3B82F6),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              final newRemark = remarkController.text.trim();
+              robotController.updateRobotOrganization(robot.id, newRemark);
+              Navigator.pop(ctx);
+              ToastUtil.show(newRemark.isNotEmpty ? '备注名已保存: $newRemark' : '已清除备注名，恢复默认名称');
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -733,19 +833,57 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
             return Text('设备详情: ${widget.robotId}', style: const TextStyle(fontWeight: FontWeight.bold));
           }
           final robot = robotController.robots[robotIndex];
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'SN: ${widget.robotId}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+          return InkWell(
+            onTap: () => _showEditRemarkDialog(context, robot),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'SN: ${widget.robotId}',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(width: 6),
+                      Tooltip(
+                        message: '点击修改备注名',
+                        child: Icon(Icons.edit_note_rounded, color: Colors.blueAccent.withOpacity(0.8), size: 18),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        robot.displayName,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: robot.hasCustomRemark ? const Color(0xFF60A5FA) : Colors.white70,
+                          fontWeight: robot.hasCustomRemark ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                      if (robot.hasCustomRemark) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF3B82F6).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text('备注', style: TextStyle(color: Color(0xFF60A5FA), fontSize: 10)),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
-              Text(
-                robot.organization.isNotEmpty ? robot.organization : '未分配机构',
-                style: const TextStyle(fontSize: 12, color: Colors.white70),
-              ),
-            ],
+            ),
           );
         }),
         backgroundColor: const Color(0xFF1E293B),

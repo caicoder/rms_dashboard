@@ -110,10 +110,14 @@ class RobotCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              robot.organization.isNotEmpty ? robot.organization : '未分配机构',
+                              robot.displayName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white54,),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: robot.hasCustomRemark ? FontWeight.bold : FontWeight.w500,
+                                color: robot.hasCustomRemark ? const Color(0xFF60A5FA) : Colors.white70,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(

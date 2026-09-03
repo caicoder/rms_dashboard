@@ -207,7 +207,8 @@ class HealthMeasurement {
 class RobotModel {
   final String id;
   String name;
-  String organization; // 新增机构名称
+  String organization; // 备注名称（原机构名称字段，用于存储用户自定义备注名）
+  String deviceName; // 接口拉取的设备名字
   double positionX;
   double positionY;
   DateTime lastUpdated;
@@ -231,6 +232,23 @@ class RobotModel {
   Map<String, PatrolSession> patrolHistory;
   List<AlarmEvent> alarmHistory;
   List<HealthMeasurement> healthHistory;
+
+  /// 优先显示备注名字（organization），如果没有备注名字显示接口设备名字（deviceName）
+  String get displayName {
+    if (organization.trim().isNotEmpty) {
+      return organization.trim();
+    }
+    if (deviceName.trim().isNotEmpty) {
+      return deviceName.trim();
+    }
+    if (name.trim().isNotEmpty && !name.startsWith('设备 ') && name != '自动发现') {
+      return name.trim();
+    }
+    return '设备 $id';
+  }
+
+  /// 是否有设置自定义备注名字
+  bool get hasCustomRemark => organization.trim().isNotEmpty;
 
   bool get isOffline {
     return DateTime.now().difference(lastUpdated).inMinutes >= 5;
@@ -268,6 +286,7 @@ class RobotModel {
     required this.id,
     required this.name,
     this.organization = '',
+    this.deviceName = '',
     this.positionX = 0.0,
     this.positionY = 0.0,
     DateTime? lastUpdated,
@@ -299,6 +318,7 @@ class RobotModel {
     'id': id,
     'name': name,
     'organization': organization,
+    'deviceName': deviceName,
     'positionX': positionX,
     'positionY': positionY,
     'lastUpdated': lastUpdated.toIso8601String(),
@@ -324,6 +344,7 @@ class RobotModel {
     id: json['id'] ?? '',
     name: json['name'] ?? '',
     organization: json['organization'] ?? '',
+    deviceName: json['deviceName']?.toString() ?? '',
     positionX: json['positionX']?.toDouble() ?? 0.0,
     positionY: json['positionY']?.toDouble() ?? 0.0,
     lastUpdated: json['lastUpdated'] != null ? DateTime.parse(json['lastUpdated']) : null,

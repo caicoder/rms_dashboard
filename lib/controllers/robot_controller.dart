@@ -11,6 +11,7 @@ import '../services/online_player.dart';
 import '../models/robot_model.dart';
 import '../models/docking_notification_model.dart';
 import '../models/anomaly_notification_model.dart';
+import '../models/dashboard_stats_model.dart';
 import '../views/details/robot_detail_page.dart';
 import 'mqtt_controller.dart';
 
@@ -57,7 +58,9 @@ class RobotController extends GetxController {
     final query = searchQuery.value.trim().toLowerCase();
     return list.where((r) {
       return r.id.toLowerCase().contains(query) ||
-             r.organization.toLowerCase().contains(query);
+             r.organization.toLowerCase().contains(query) ||
+             r.deviceName.toLowerCase().contains(query) ||
+             r.displayName.toLowerCase().contains(query);
     }).toList();
   }
 
@@ -1079,6 +1082,67 @@ class RobotController extends GetxController {
     anomalyNotifications.removeWhere((item) => item.id == id);
     anomalyNotifications.refresh();
     saveRobots();
+  }
+
+  /// [接口拉取SN列表] 从统计接口返回的 statisticsList 同步所有设备到首页机器人列表
+  void syncRobotsFromApi(List<DeviceStatisticsItem> apiList) {
+    if (apiList.isEmpty) return;
+
+    final mqtt = Get.isRegistered<MqttController>() ? Get.find<MqttController>() : null;
+    bool hasChange = false;
+
+    for (var item in apiList) {
+      final sn = item.deviceSn.trim();
+      final apiDeviceName = item.deviceName.trim();
+      if (sn.isEmpty) continue;
+
+      if (_robotsMap.containsKey(sn)) {
+        var existing = _robotsMap[sn]!;
+        // 更新接口返回的名字
+        if (existing.deviceName != apiDeviceName && apiDeviceName.isNotEmpty) {
+          existing.deviceName = apiDeviceName;
+          hasChange = true;
+        }
+        // 如果旧的 name 是默认生成的且接口有明确名称，更新 name
+        if ((existing.name.isEmpty || existing.name.startsWith('设备 ') || existing.name == '自动发现') && apiDeviceName.isNotEmpty) {
+          existing.name = apiDeviceName;
+          hasChange = true;
+        }
+      } else {
+        // 新发现的机器人加入列表
+        var newRobot = RobotModel(
+          id: sn,
+          name: apiDeviceName.isNotEmpty ? apiDeviceName : '设备 $sn',
+          deviceName: apiDeviceName,
+          organization: '', // 备注名初始为空，优先显示备注名，无备注名显示接口 deviceName
+          lastUpdated: DateTime.now().subtract(const Duration(minutes: 2)),
+        );
+        robots.add(newRobot);
+        _robotsMap[sn] = newRobot;
+        hasChange = true;
+      }
+
+      // 通过这个 SN 进行 MQTT 订阅
+      try {
+        mqtt?.subscribeToRobot(sn);
+      } catch (_) {}
+    }
+
+    if (hasChange) {
+      _sortRobots();
+      robots.refresh();
+      saveRobots();
+    }
+  }
+
+  /// 更新机器人的备注名（存储在 organization 字段上）
+  void updateRobotOrganization(String sn, String newRemark) {
+    var robot = _robotsMap[sn];
+    if (robot != null) {
+      robot.organization = newRemark.trim();
+      robots.refresh();
+      saveRobots();
+    }
   }
 }
 

@@ -8,6 +8,7 @@ import 'package:rms_dashboard/utils/huaxi_util.dart';
 import '../../controllers/robot_controller.dart';
 import '../../controllers/mqtt_controller.dart';
 import '../../controllers/dashboard_tab_controller.dart';
+import '../../controllers/device_report_controller.dart';
 import '../statistics/device_exception_report_page.dart';
 import '../alarm/alarm_events_page.dart';
 import '../notifications/docking_notification_page.dart';
@@ -26,9 +27,14 @@ import '../../models/user_entity.dart';
 class DashboardPage extends StatelessWidget {
   DashboardPage({Key? key}) : super(key: key);
 
-  final RobotController robotController = Get.put(RobotController(), permanent: true);
-  final MqttController mqttController = Get.put(MqttController(), permanent: true);
-  final DashboardTabController tabController = Get.put(DashboardTabController(), permanent: true);
+  final RobotController robotController =
+      Get.put(RobotController(), permanent: true);
+  final MqttController mqttController =
+      Get.put(MqttController(), permanent: true);
+  final DashboardTabController tabController =
+      Get.put(DashboardTabController(), permanent: true);
+  final DeviceReportController reportController =
+      Get.put(DeviceReportController(), permanent: true);
   final TextEditingController _searchController = TextEditingController();
 
   void _showLoginDialog(BuildContext context) {
@@ -42,7 +48,8 @@ class DashboardPage extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        title: const Text('用户登录', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('用户登录',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -53,8 +60,10 @@ class DashboardPage extends StatelessWidget {
               decoration: const InputDecoration(
                 labelText: '用户名/手机号',
                 labelStyle: TextStyle(color: Colors.white54),
-                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.blueAccent)),
+                enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.blueAccent)),
               ),
             ),
             const SizedBox(height: 16),
@@ -65,8 +74,10 @@ class DashboardPage extends StatelessWidget {
               decoration: const InputDecoration(
                 labelText: '密码',
                 labelStyle: TextStyle(color: Colors.white54),
-                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.blueAccent)),
+                enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.blueAccent)),
               ),
             ),
           ],
@@ -101,7 +112,7 @@ class DashboardPage extends StatelessWidget {
                   'username': phone,
                   'password': mimaContol.text,
                   "grantType": "password",
-                  "clientId":"2ce32a9f2712aca5cca8defdd81b83ab",
+                  "clientId": "2ce32a9f2712aca5cca8defdd81b83ab",
                 },
                 (data) async {
                   ToastUtil.dismiss();
@@ -136,7 +147,8 @@ class DashboardPage extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E293B),
-        title: const Text('添加机器人 (Add Robot)', style: TextStyle(color: Colors.white)),
+        title: const Text('添加机器人 (Add Robot)',
+            style: TextStyle(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -147,8 +159,10 @@ class DashboardPage extends StatelessWidget {
               decoration: const InputDecoration(
                 labelText: '输入设备 SN 码 (e.g., SN001234)',
                 labelStyle: TextStyle(color: Colors.white54),
-                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.blueAccent)),
+                enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.blueAccent)),
               ),
             ),
             const SizedBox(height: 16),
@@ -158,8 +172,10 @@ class DashboardPage extends StatelessWidget {
               decoration: const InputDecoration(
                 labelText: '输入机构名称 (Organization)',
                 labelStyle: TextStyle(color: Colors.white54),
-                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.blueAccent)),
+                enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.blueAccent)),
               ),
             ),
           ],
@@ -170,11 +186,13 @@ class DashboardPage extends StatelessWidget {
               Navigator.pop(context);
               _showBatchAddDialog(context);
             },
-            child: const Text('批量导入 (Batch Import)', style: TextStyle(color: Colors.amberAccent)),
+            child: const Text('批量导入 (Batch Import)',
+                style: TextStyle(color: Colors.amberAccent)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消 (Cancel)', style: TextStyle(color: Colors.white70)),
+            child: const Text('取消 (Cancel)',
+                style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
@@ -182,13 +200,17 @@ class DashboardPage extends StatelessWidget {
               final sn = snController.text.trim();
               final org = orgController.text.trim();
               if (sn.isEmpty) {
-                Get.snackbar('提示', '请输入设备 SN 码', snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.orangeAccent, colorText: Colors.white);
+                Get.snackbar('提示', '请输入设备 SN 码',
+                    snackPosition: SnackPosition.BOTTOM,
+                    backgroundColor: Colors.orangeAccent,
+                    colorText: Colors.white);
                 return;
               }
               robotController.addRobotBySn(sn, org);
               Navigator.pop(context);
             },
-            child: const Text('添加 (Add)', style: TextStyle(color: Colors.white)),
+            child:
+                const Text('添加 (Add)', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -202,7 +224,8 @@ class DashboardPage extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E293B),
-        title: const Text('批量添加设备 (Batch Add)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('批量添加设备 (Batch Add)',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: SizedBox(
           width: 500,
           height: 300,
@@ -210,20 +233,24 @@ class DashboardPage extends StatelessWidget {
             controller: jsonController,
             autofocus: true,
             maxLines: 15,
-            style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
+            style: const TextStyle(
+                color: Colors.white, fontFamily: 'monospace', fontSize: 13),
             decoration: InputDecoration(
-              hintText: '请输入 JSON 数组，例如：\n[\n  {"name": "深圳市XX机构", "SN": "ZJX110..."}\n]',
+              hintText:
+                  '请输入 JSON 数组，例如：\n[\n  {"name": "深圳市XX机构", "SN": "ZJX110..."}\n]',
               hintStyle: const TextStyle(color: Colors.white30),
               filled: true,
               fillColor: Colors.black26,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消 (Cancel)', style: TextStyle(color: Colors.white70)),
+            child: const Text('取消 (Cancel)',
+                style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
@@ -239,8 +266,13 @@ class DashboardPage extends StatelessWidget {
                       String name = item['name']?.toString().trim() ?? '';
                       if (sn.isNotEmpty) {
                         int previousCount = robotController.robots.length;
-                        robotController.addRobotBySn(sn, name, showSnackbar: false);
-                        if (robotController.robots.length > previousCount || robotController.robots.firstWhere((r) => r.id == sn).name == name) {
+                        robotController.addRobotBySn(sn, name,
+                            showSnackbar: false);
+                        if (robotController.robots.length > previousCount ||
+                            robotController.robots
+                                    .firstWhere((r) => r.id == sn)
+                                    .name ==
+                                name) {
                           successCount++;
                         } else {
                           skipCount++;
@@ -249,15 +281,26 @@ class DashboardPage extends StatelessWidget {
                     }
                   }
                   Navigator.pop(context);
-                  Get.snackbar('批量添加完成', '成功导入 $successCount 个设备，跳过已存在 $skipCount 个', snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green, colorText: Colors.white);
+                  Get.snackbar(
+                      '批量添加完成', '成功导入 $successCount 个设备，跳过已存在 $skipCount 个',
+                      snackPosition: SnackPosition.BOTTOM,
+                      backgroundColor: Colors.green,
+                      colorText: Colors.white);
                 } else {
-                  Get.snackbar('格式错误', 'JSON 必须是一个数组 []', snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.redAccent, colorText: Colors.white);
+                  Get.snackbar('格式错误', 'JSON 必须是一个数组 []',
+                      snackPosition: SnackPosition.BOTTOM,
+                      backgroundColor: Colors.redAccent,
+                      colorText: Colors.white);
                 }
               } catch (e) {
-                Get.snackbar('解析失败', '请输入合法的 JSON 格式', snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.redAccent, colorText: Colors.white);
+                Get.snackbar('解析失败', '请输入合法的 JSON 格式',
+                    snackPosition: SnackPosition.BOTTOM,
+                    backgroundColor: Colors.redAccent,
+                    colorText: Colors.white);
               }
             },
-            child: const Text('导入 (Import)', style: TextStyle(color: Colors.white)),
+            child: const Text('导入 (Import)',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -269,36 +312,37 @@ class DashboardPage extends StatelessWidget {
     final isLargeScreen = MediaQuery.of(context).size.width >= 768;
 
     return Scaffold(
-      floatingActionButton: Obx(() {
-        if (tabController.selectedTabIndex.value != 0) {
-          return const SizedBox.shrink();
-        }
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            TvFocusHelper(
-              onTap: () => _showAddRobotDialog(context),
-              onLongPress: () => _showBatchAddDialog(context),
-              borderRadius: BorderRadius.circular(30),
-              focusColor: const Color(0xFF3B82F6),
-              child: FloatingActionButton.extended(
-                heroTag: 'add_device',
-                onPressed: () => _showAddRobotDialog(context),
-                icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white),
-                label: const Text('添加设备', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                backgroundColor: const Color(0xFF3B82F6),
-              ),
-            ),
-          ],
-        );
-      }),
+      // floatingActionButton: Obx(() {
+      //   if (tabController.selectedTabIndex.value != 0) {
+      //     return const SizedBox.shrink();
+      //   }
+      //   return Column(
+      //     mainAxisSize: MainAxisSize.min,
+      //     crossAxisAlignment: CrossAxisAlignment.end,
+      //     children: [
+      //       TvFocusHelper(
+      //         onTap: () => _showAddRobotDialog(context),
+      //         onLongPress: () => _showBatchAddDialog(context),
+      //         borderRadius: BorderRadius.circular(30),
+      //         focusColor: const Color(0xFF3B82F6),
+      //         child: FloatingActionButton.extended(
+      //           heroTag: 'add_device',
+      //           onPressed: () => _showAddRobotDialog(context),
+      //           icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white),
+      //           label: const Text('添加设备', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      //           backgroundColor: const Color(0xFF3B82F6),
+      //         ),
+      //       ),
+      //     ],
+      //   );
+      // }),
       bottomNavigationBar: isLargeScreen
           ? null
           : Obx(() => Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E293B),
-                  border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1))),
+                  border: Border(
+                      top: BorderSide(color: Colors.white.withOpacity(0.1))),
                 ),
                 child: BottomNavigationBar(
                   currentIndex: tabController.selectedTabIndex.value,
@@ -307,7 +351,8 @@ class DashboardPage extends StatelessWidget {
                   elevation: 0,
                   selectedItemColor: const Color(0xFF3B82F6),
                   unselectedItemColor: Colors.white54,
-                  selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  selectedLabelStyle: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 12),
                   unselectedLabelStyle: const TextStyle(fontSize: 12),
                   type: BottomNavigationBarType.fixed,
                   items: [
@@ -329,18 +374,21 @@ class DashboardPage extends StatelessWidget {
                               top: -4,
                               right: -8,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 1),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFEF4444),
                                   borderRadius: BorderRadius.circular(8),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFFEF4444).withOpacity(0.8),
+                                      color: const Color(0xFFEF4444)
+                                          .withOpacity(0.8),
                                       blurRadius: 4,
                                     ),
                                   ],
                                 ),
-                                constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                                constraints: const BoxConstraints(
+                                    minWidth: 14, minHeight: 14),
                                 child: Text(
                                   robotController.activeAlarms.length > 99
                                       ? '99+'
@@ -368,20 +416,24 @@ class DashboardPage extends StatelessWidget {
                               top: -4,
                               right: -8,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 1),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF59E0B),
                                   borderRadius: BorderRadius.circular(8),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFFF59E0B).withOpacity(0.8),
+                                      color: const Color(0xFFF59E0B)
+                                          .withOpacity(0.8),
                                       blurRadius: 4,
                                     ),
                                   ],
                                 ),
-                                constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                                constraints: const BoxConstraints(
+                                    minWidth: 14, minHeight: 14),
                                 child: Text(
-                                  robotController.dockingNotifications.length > 99
+                                  robotController.dockingNotifications.length >
+                                          99
                                       ? '99+'
                                       : '${robotController.dockingNotifications.length}',
                                   style: const TextStyle(
@@ -407,20 +459,24 @@ class DashboardPage extends StatelessWidget {
                               top: -4,
                               right: -8,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 1),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFEF4444),
                                   borderRadius: BorderRadius.circular(8),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFFEF4444).withOpacity(0.8),
+                                      color: const Color(0xFFEF4444)
+                                          .withOpacity(0.8),
                                       blurRadius: 4,
                                     ),
                                   ],
                                 ),
-                                constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                                constraints: const BoxConstraints(
+                                    minWidth: 14, minHeight: 14),
                                 child: Text(
-                                  robotController.anomalyNotifications.length > 99
+                                  robotController.anomalyNotifications.length >
+                                          99
                                       ? '99+'
                                       : '${robotController.anomalyNotifications.length}',
                                   style: const TextStyle(
@@ -527,7 +583,11 @@ class DashboardPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Divider(height: 1, color: Colors.white.withOpacity(0.08), indent: 12, endIndent: 12),
+          Divider(
+              height: 1,
+              color: Colors.white.withOpacity(0.08),
+              indent: 12,
+              endIndent: 12),
           const SizedBox(height: 16),
 
           // Tab 0: 设备监控
@@ -580,7 +640,8 @@ class DashboardPage extends StatelessWidget {
 
           // MQTT Status Indicator (Compact)
           Obx(() {
-            final isConnected = mqttController.connectionState.value == MqttConnectionState.connected;
+            final isConnected = mqttController.connectionState.value ==
+                MqttConnectionState.connected;
             final isRetrying = mqttController.isRetrying.value;
             final tooltipMsg = isConnected
                 ? 'MQTT 连接正常'
@@ -590,17 +651,20 @@ class DashboardPage extends StatelessWidget {
               message: tooltipMsg,
               preferBelow: false,
               child: InkWell(
-                onTap: isConnected ? null : () => mqttController.manualReconnect(),
+                onTap:
+                    isConnected ? null : () => mqttController.manualReconnect(),
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
                   width: 36,
                   height: 36,
                   margin: const EdgeInsets.symmetric(vertical: 6),
                   decoration: BoxDecoration(
-                    color: (isConnected ? Colors.green : Colors.red).withOpacity(0.15),
+                    color: (isConnected ? Colors.green : Colors.red)
+                        .withOpacity(0.15),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: (isConnected ? Colors.green : Colors.red).withOpacity(0.3),
+                      color: (isConnected ? Colors.green : Colors.red)
+                          .withOpacity(0.3),
                     ),
                   ),
                   child: Center(
@@ -609,10 +673,14 @@ class DashboardPage extends StatelessWidget {
                       height: 10,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isConnected ? Colors.greenAccent : Colors.redAccent,
+                        color:
+                            isConnected ? Colors.greenAccent : Colors.redAccent,
                         boxShadow: [
                           BoxShadow(
-                            color: (isConnected ? Colors.greenAccent : Colors.redAccent).withOpacity(0.8),
+                            color: (isConnected
+                                    ? Colors.greenAccent
+                                    : Colors.redAccent)
+                                .withOpacity(0.8),
                             blurRadius: 6,
                             spreadRadius: 1,
                           ),
@@ -641,7 +709,8 @@ class DashboardPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Center(
-                  child: Icon(Icons.account_circle_outlined, size: 22, color: Colors.white70),
+                  child: Icon(Icons.account_circle_outlined,
+                      size: 22, color: Colors.white70),
                 ),
               ),
             ),
@@ -694,7 +763,9 @@ class DashboardPage extends StatelessWidget {
                   icon,
                   size: 24,
                   color: isSelected
-                      ? (isAlarmBadge ? const Color(0xFFF87171) : const Color(0xFF60A5FA))
+                      ? (isAlarmBadge
+                          ? const Color(0xFFF87171)
+                          : const Color(0xFF60A5FA))
                       : (isAlarmBadge && badgeCount != null && badgeCount > 0
                           ? const Color(0xFFF87171)
                           : Colors.white60),
@@ -704,15 +775,21 @@ class DashboardPage extends StatelessWidget {
                     top: 2,
                     right: 2,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                      constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 1),
+                      constraints:
+                          const BoxConstraints(minWidth: 14, minHeight: 14),
                       decoration: BoxDecoration(
-                        color: badgeColor ?? (isAlarmBadge ? const Color(0xFFEF4444) : const Color(0xFF3B82F6)),
+                        color: badgeColor ??
+                            (isAlarmBadge
+                                ? const Color(0xFFEF4444)
+                                : const Color(0xFF3B82F6)),
                         borderRadius: BorderRadius.circular(8),
                         boxShadow: (badgeColor != null || isAlarmBadge)
                             ? [
                                 BoxShadow(
-                                  color: (badgeColor ?? const Color(0xFFEF4444)).withOpacity(0.8),
+                                  color: (badgeColor ?? const Color(0xFFEF4444))
+                                      .withOpacity(0.8),
                                   blurRadius: 6,
                                   spreadRadius: 1,
                                 )
@@ -739,11 +816,18 @@ class DashboardPage extends StatelessWidget {
                       width: 3,
                       height: 18,
                       decoration: BoxDecoration(
-                        color: badgeColor ?? (isAlarmBadge ? const Color(0xFFF87171) : const Color(0xFF60A5FA)),
+                        color: badgeColor ??
+                            (isAlarmBadge
+                                ? const Color(0xFFF87171)
+                                : const Color(0xFF60A5FA)),
                         borderRadius: BorderRadius.circular(2),
                         boxShadow: [
                           BoxShadow(
-                            color: (badgeColor ?? (isAlarmBadge ? const Color(0xFFF87171) : const Color(0xFF60A5FA))).withOpacity(0.8),
+                            color: (badgeColor ??
+                                    (isAlarmBadge
+                                        ? const Color(0xFFF87171)
+                                        : const Color(0xFF60A5FA)))
+                                .withOpacity(0.8),
                             blurRadius: 4,
                           ),
                         ],
@@ -773,7 +857,8 @@ class DashboardPage extends StatelessWidget {
             }
 
             return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
               child: GridView.builder(
                 physics: const BouncingScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -802,15 +887,18 @@ class DashboardPage extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context, [bool isLargeScreen = false]) {
     bool isSmallScreen = MediaQuery.of(context).size.width < 600;
-    
+
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 16.0 : 24.0, vertical: isSmallScreen ? 12.0 : 20.0),
+          padding: EdgeInsets.symmetric(
+              horizontal: isSmallScreen ? 16.0 : 24.0,
+              vertical: isSmallScreen ? 12.0 : 20.0),
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B).withOpacity(0.5),
-            border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
+            border: Border(
+                bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -824,7 +912,9 @@ class DashboardPage extends StatelessWidget {
                         color: const Color(0xFF3B82F6).withOpacity(0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(Icons.dashboard_rounded, color: const Color(0xFF3B82F6), size: isSmallScreen ? 24 : 28),
+                      child: Icon(Icons.dashboard_rounded,
+                          color: const Color(0xFF3B82F6),
+                          size: isSmallScreen ? 24 : 28),
                     ),
                     SizedBox(width: isSmallScreen ? 8 : 16),
                     Expanded(
@@ -847,7 +937,8 @@ class DashboardPage extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Obx(() {
-                final isConnected = mqttController.connectionState.value == MqttConnectionState.connected;
+                final isConnected = mqttController.connectionState.value ==
+                    MqttConnectionState.connected;
                 final isRetrying = mqttController.isRetrying.value;
                 final retryCount = mqttController.retryCount.value;
 
@@ -855,11 +946,16 @@ class DashboardPage extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 10 : 16, vertical: isSmallScreen ? 6 : 8),
+                      padding: EdgeInsets.symmetric(
+                          horizontal: isSmallScreen ? 10 : 16,
+                          vertical: isSmallScreen ? 6 : 8),
                       decoration: BoxDecoration(
-                        color: (isConnected ? Colors.green : Colors.red).withOpacity(0.15),
+                        color: (isConnected ? Colors.green : Colors.red)
+                            .withOpacity(0.15),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: (isConnected ? Colors.green : Colors.red).withOpacity(0.3)),
+                        border: Border.all(
+                            color: (isConnected ? Colors.green : Colors.red)
+                                .withOpacity(0.3)),
                       ),
                       child: Row(
                         children: [
@@ -868,10 +964,15 @@ class DashboardPage extends StatelessWidget {
                             height: 8,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: isConnected ? Colors.greenAccent : Colors.redAccent,
+                              color: isConnected
+                                  ? Colors.greenAccent
+                                  : Colors.redAccent,
                               boxShadow: [
                                 BoxShadow(
-                                  color: (isConnected ? Colors.greenAccent : Colors.redAccent).withOpacity(0.5),
+                                  color: (isConnected
+                                          ? Colors.greenAccent
+                                          : Colors.redAccent)
+                                      .withOpacity(0.5),
                                   blurRadius: 6,
                                   spreadRadius: 2,
                                 )
@@ -880,11 +981,19 @@ class DashboardPage extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            isSmallScreen 
-                                ? (isConnected ? '正常' : (isRetrying ? '重连($retryCount)' : '断开')) 
-                                : (isConnected ? 'MQTT 连接正常' : (isRetrying ? 'MQTT 重连中($retryCount/5)' : 'MQTT 已断开')),
+                            isSmallScreen
+                                ? (isConnected
+                                    ? '正常'
+                                    : (isRetrying ? '重连($retryCount)' : '断开'))
+                                : (isConnected
+                                    ? 'MQTT 连接正常'
+                                    : (isRetrying
+                                        ? 'MQTT 重连中($retryCount/5)'
+                                        : 'MQTT 已断开')),
                             style: TextStyle(
-                              color: isConnected ? Colors.greenAccent : Colors.redAccent,
+                              color: isConnected
+                                  ? Colors.greenAccent
+                                  : Colors.redAccent,
                               fontWeight: FontWeight.w600,
                               fontSize: isSmallScreen ? 12 : 14,
                             ),
@@ -895,23 +1004,62 @@ class DashboardPage extends StatelessWidget {
                     if (!isConnected) ...[
                       const SizedBox(width: 8),
                       TvFocusHelper(
-                        onTap: isRetrying ? () {} : () => mqttController.manualReconnect(),
+                        onTap: isRetrying
+                            ? () {}
+                            : () => mqttController.manualReconnect(),
                         borderRadius: BorderRadius.circular(20),
                         focusColor: Colors.blueAccent,
                         child: Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
-                            color: isRetrying ? Colors.grey.withOpacity(0.2) : Colors.blueAccent.withOpacity(0.2),
+                            color: isRetrying
+                                ? Colors.grey.withOpacity(0.2)
+                                : Colors.blueAccent.withOpacity(0.2),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            isRetrying ? Icons.hourglass_empty : Icons.refresh_rounded, 
-                            color: isRetrying ? Colors.grey : Colors.blueAccent, 
-                            size: 18
-                          ),
+                              isRetrying
+                                  ? Icons.hourglass_empty
+                                  : Icons.refresh_rounded,
+                              color:
+                                  isRetrying ? Colors.grey : Colors.blueAccent,
+                              size: 18),
                         ),
                       )
-                    ]
+                    ],
+                    const SizedBox(width: 8),
+                    Tooltip(
+                      message: '从接口拉取并同步最新设备列表',
+                      child: InkWell(
+                        onTap: () => reportController.fetchData(isManual: true),
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: Colors.white.withOpacity(0.1)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.sync_rounded,
+                                  color: Color(0xFF60A5FA), size: 16),
+                              SizedBox(width: 4),
+                              Text(
+                                '同步设备',
+                                style: TextStyle(
+                                    color: Color(0xFF60A5FA),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 );
               })
@@ -935,7 +1083,10 @@ class DashboardPage extends StatelessWidget {
           const SizedBox(height: 24),
           Text(
             isSearch ? '没有找到匹配的设备' : '尚未添加设备',
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Colors.white70),
+            style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                color: Colors.white70),
           ),
           const SizedBox(height: 8),
           Padding(
@@ -955,23 +1106,40 @@ class DashboardPage extends StatelessWidget {
 
   String _getTypeName(int type) {
     switch (type) {
-      case -1: return '全部';
-      case -4: return '在线设备';
-      case -2: return '急停触发';
-      case -3: return '设备离线';
-      case 0: return '空闲待机';
-      case 1: return '回去充电';
-      case 3: return '巡逻任务';
-      case 7: return '代送任务';
-      case 109: return '前往迎宾点';
-      case 110: return '前往传话';
-      case 111: return '前往拿取';
-      case 112: return '前往告警任务';
-      case 113: return '大喇叭任务';
-      case 114: return '进行导览任务';
-      case 115: return '前往目标点';
-      case 116: return '带路';
-      default: return '类型 $type';
+      case -1:
+        return '全部';
+      case -4:
+        return '在线设备';
+      case -2:
+        return '急停触发';
+      case -3:
+        return '设备离线';
+      case 0:
+        return '空闲待机';
+      case 1:
+        return '回去充电';
+      case 3:
+        return '巡逻任务';
+      case 7:
+        return '代送任务';
+      case 109:
+        return '前往迎宾点';
+      case 110:
+        return '前往传话';
+      case 111:
+        return '前往拿取';
+      case 112:
+        return '前往告警任务';
+      case 113:
+        return '大喇叭任务';
+      case 114:
+        return '进行导览任务';
+      case 115:
+        return '前往目标点';
+      case 116:
+        return '带路';
+      default:
+        return '类型 $type';
     }
   }
 
@@ -1029,11 +1197,14 @@ class DashboardPage extends StatelessWidget {
                       style: const TextStyle(color: Colors.white, fontSize: 14),
                       decoration: InputDecoration(
                         hintText: '搜索 SN 或机构名称...',
-                        hintStyle: const TextStyle(color: Colors.white30, fontSize: 14),
-                        prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                        hintStyle: const TextStyle(
+                            color: Colors.white30, fontSize: 14),
+                        prefixIcon:
+                            const Icon(Icons.search, color: Colors.white54),
                         suffixIcon: query.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.clear, color: Colors.white54),
+                                icon: const Icon(Icons.clear,
+                                    color: Colors.white54),
                                 onPressed: () {
                                   _searchController.clear();
                                   robotController.searchQuery.value = '';
@@ -1042,7 +1213,8 @@ class DashboardPage extends StatelessWidget {
                               )
                             : null,
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
                   ),
@@ -1055,17 +1227,28 @@ class DashboardPage extends StatelessWidget {
                   },
                   color: const Color(0xFF1E293B),
                   elevation: 8,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                   itemBuilder: (context) {
                     return sortedTypes.map((t) {
                       int count = countForType(t);
                       bool isSelected = t == selectedType;
-                      IconData iconData = isSelected 
-                          ? Icons.check_circle_rounded 
-                          : (t == -4 ? Icons.sensors_rounded : (t == -2 ? Icons.stop_circle_rounded : (t == -3 ? Icons.cloud_off_rounded : Icons.radio_button_unchecked_rounded)));
-                      Color iconColor = isSelected 
-                          ? const Color(0xFF3B82F6) 
-                          : (t == -4 ? const Color(0xFF10B981) : (t == -2 ? const Color(0xFFEF4444) : (t == -3 ? Colors.grey : Colors.white38)));
+                      IconData iconData = isSelected
+                          ? Icons.check_circle_rounded
+                          : (t == -4
+                              ? Icons.sensors_rounded
+                              : (t == -2
+                                  ? Icons.stop_circle_rounded
+                                  : (t == -3
+                                      ? Icons.cloud_off_rounded
+                                      : Icons.radio_button_unchecked_rounded)));
+                      Color iconColor = isSelected
+                          ? const Color(0xFF3B82F6)
+                          : (t == -4
+                              ? const Color(0xFF10B981)
+                              : (t == -2
+                                  ? const Color(0xFFEF4444)
+                                  : (t == -3 ? Colors.grey : Colors.white38)));
 
                       return PopupMenuItem<int>(
                         value: t,
@@ -1081,23 +1264,32 @@ class DashboardPage extends StatelessWidget {
                               child: Text(
                                 _getTypeName(t),
                                 style: TextStyle(
-                                  color: isSelected ? Colors.white : Colors.white70,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Colors.white70,
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
                                   fontSize: 13,
                                 ),
                               ),
                             ),
                             const SizedBox(width: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
-                                color: isSelected ? const Color(0xFF3B82F6) : Colors.white10,
+                                color: isSelected
+                                    ? const Color(0xFF3B82F6)
+                                    : Colors.white10,
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(
                                 '$count',
                                 style: TextStyle(
-                                  color: isSelected ? Colors.white : Colors.white70,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Colors.white70,
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -1109,14 +1301,17 @@ class DashboardPage extends StatelessWidget {
                     }).toList();
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: selectedType != -1 
+                      color: selectedType != -1
                           ? const Color(0xFF3B82F6).withOpacity(0.3)
                           : const Color(0xFF1E293B).withOpacity(0.5),
                       borderRadius: BorderRadius.circular(30),
                       border: Border.all(
-                        color: selectedType != -1 ? const Color(0xFF3B82F6) : Colors.white.withOpacity(0.1),
+                        color: selectedType != -1
+                            ? const Color(0xFF3B82F6)
+                            : Colors.white.withOpacity(0.1),
                       ),
                     ),
                     child: Row(
@@ -1125,19 +1320,26 @@ class DashboardPage extends StatelessWidget {
                         Icon(
                           Icons.filter_list_rounded,
                           size: 18,
-                          color: selectedType != -1 ? const Color(0xFF60A5FA) : Colors.white70,
+                          color: selectedType != -1
+                              ? const Color(0xFF60A5FA)
+                              : Colors.white70,
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          selectedType == -1 ? '类型筛选 ($selectedTypeCount)' : '$selectedTypeName ($selectedTypeCount)',
+                          selectedType == -1
+                              ? '类型筛选 ($selectedTypeCount)'
+                              : '$selectedTypeName ($selectedTypeCount)',
                           style: TextStyle(
-                            color: selectedType != -1 ? Colors.white : Colors.white70,
+                            color: selectedType != -1
+                                ? Colors.white
+                                : Colors.white70,
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(width: 4),
-                        const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70, size: 20),
+                        const Icon(Icons.arrow_drop_down_rounded,
+                            color: Colors.white70, size: 20),
                       ],
                     ),
                   ),
@@ -1151,7 +1353,8 @@ class DashboardPage extends StatelessWidget {
   }
 
   void _showLargeImageDialog(BuildContext context, String imgUrl) {
-    const String prefix = 'https://huaxi-1330823579.cos.ap-shanghai.myqcloud.com/robot';
+    const String prefix =
+        'https://huaxi-1330823579.cos.ap-shanghai.myqcloud.com/robot';
     final fullUrl = imgUrl.startsWith('http') ? imgUrl : prefix + imgUrl.trim();
 
     showDialog(
@@ -1168,7 +1371,8 @@ class DashboardPage extends StatelessWidget {
                   fullUrl,
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) => const Center(
-                    child: Text('图片加载失败', style: TextStyle(color: Colors.white)),
+                    child:
+                        Text('图片加载失败', style: TextStyle(color: Colors.white)),
                   ),
                 ),
               ),
@@ -1199,7 +1403,10 @@ class DashboardPage extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white.withOpacity(0.1)),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4)),
+            BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 10,
+                offset: const Offset(0, 4)),
           ],
         ),
         child: Row(
@@ -1210,7 +1417,10 @@ class DashboardPage extends StatelessWidget {
             const SizedBox(width: 16),
             Text(
               '当前页数: ${robotController.currentPage.value + 1} / ${robotController.totalPages} (可侧滑翻页)',
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -1218,7 +1428,8 @@ class DashboardPage extends StatelessWidget {
     });
   }
 
-  Widget _buildFloatingAlarmList(BuildContext context, List<ActiveAlarmItem> alarms) {
+  Widget _buildFloatingAlarmList(
+      BuildContext context, List<ActiveAlarmItem> alarms) {
     final isCollapsed = robotController.isAlarmsCollapsed.value;
     final selectedTab = robotController.selectedRightTab.value;
     final notifications = robotController.notifications;
@@ -1228,12 +1439,16 @@ class DashboardPage extends StatelessWidget {
         color: const Color(0xFF1E293B).withOpacity(0.85),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: selectedTab == 0 ? Colors.redAccent.withOpacity(0.4) : Colors.blueAccent.withOpacity(0.4),
+          color: selectedTab == 0
+              ? Colors.redAccent.withOpacity(0.4)
+              : Colors.blueAccent.withOpacity(0.4),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: selectedTab == 0 ? Colors.redAccent.withOpacity(0.1) : Colors.blueAccent.withOpacity(0.1),
+            color: selectedTab == 0
+                ? Colors.redAccent.withOpacity(0.1)
+                : Colors.blueAccent.withOpacity(0.1),
             blurRadius: 20,
             spreadRadius: 2,
           ),
@@ -1253,35 +1468,49 @@ class DashboardPage extends StatelessWidget {
             children: [
               // Header with Tabs
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: selectedTab == 0 ? Colors.redAccent.withOpacity(0.1) : Colors.blueAccent.withOpacity(0.1),
-                  border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
+                  color: selectedTab == 0
+                      ? Colors.redAccent.withOpacity(0.1)
+                      : Colors.blueAccent.withOpacity(0.1),
+                  border: Border(
+                      bottom:
+                          BorderSide(color: Colors.white.withOpacity(0.08))),
                 ),
                 child: isCollapsed
                     ? Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            selectedTab == 0 ? Icons.ring_volume_rounded : Icons.notifications_active_rounded,
-                            color: selectedTab == 0 ? Colors.redAccent : Colors.blueAccent,
+                            selectedTab == 0
+                                ? Icons.ring_volume_rounded
+                                : Icons.notifications_active_rounded,
+                            color: selectedTab == 0
+                                ? Colors.redAccent
+                                : Colors.blueAccent,
                             size: 18,
                           ),
                           const SizedBox(width: 6),
                           Text(
                             selectedTab == 0 ? '告警' : '通知',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13),
                           ),
                           const SizedBox(width: 8),
                           TvFocusHelper(
                             onTap: () {
-                              robotController.isAlarmsCollapsed.value = !robotController.isAlarmsCollapsed.value;
+                              robotController.isAlarmsCollapsed.value =
+                                  !robotController.isAlarmsCollapsed.value;
                             },
                             borderRadius: BorderRadius.circular(8),
                             focusColor: Colors.white30,
                             child: const Padding(
                               padding: EdgeInsets.all(4.0),
-                              child: Icon(Icons.keyboard_arrow_left_rounded, color: Colors.white70, size: 18),
+                              child: Icon(Icons.keyboard_arrow_left_rounded,
+                                  color: Colors.white70, size: 18),
                             ),
                           ),
                         ],
@@ -1295,34 +1524,55 @@ class DashboardPage extends StatelessWidget {
                             },
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: selectedTab == 0 ? Colors.redAccent.withOpacity(0.25) : Colors.transparent,
+                                color: selectedTab == 0
+                                    ? Colors.redAccent.withOpacity(0.25)
+                                    : Colors.transparent,
                                 borderRadius: BorderRadius.circular(8),
-                                border: selectedTab == 0 ? Border.all(color: Colors.redAccent.withOpacity(0.5)) : null,
+                                border: selectedTab == 0
+                                    ? Border.all(
+                                        color:
+                                            Colors.redAccent.withOpacity(0.5))
+                                    : null,
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.ring_volume_rounded, color: selectedTab == 0 ? Colors.redAccent : Colors.white60, size: 15),
+                                  Icon(Icons.ring_volume_rounded,
+                                      color: selectedTab == 0
+                                          ? Colors.redAccent
+                                          : Colors.white60,
+                                      size: 15),
                                   const SizedBox(width: 4),
                                   Text(
                                     '告警',
                                     style: TextStyle(
-                                      color: selectedTab == 0 ? Colors.white : Colors.white60,
-                                      fontWeight: selectedTab == 0 ? FontWeight.bold : FontWeight.normal,
+                                      color: selectedTab == 0
+                                          ? Colors.white
+                                          : Colors.white60,
+                                      fontWeight: selectedTab == 0
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
                                       fontSize: 13,
                                     ),
                                   ),
                                   const SizedBox(width: 4),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 1),
                                     decoration: BoxDecoration(
-                                      color: selectedTab == 0 ? Colors.redAccent : Colors.white24,
+                                      color: selectedTab == 0
+                                          ? Colors.redAccent
+                                          : Colors.white24,
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Text(
                                       '${alarms.length}',
-                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                 ],
@@ -1337,34 +1587,55 @@ class DashboardPage extends StatelessWidget {
                             },
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: selectedTab == 1 ? Colors.blueAccent.withOpacity(0.25) : Colors.transparent,
+                                color: selectedTab == 1
+                                    ? Colors.blueAccent.withOpacity(0.25)
+                                    : Colors.transparent,
                                 borderRadius: BorderRadius.circular(8),
-                                border: selectedTab == 1 ? Border.all(color: Colors.blueAccent.withOpacity(0.5)) : null,
+                                border: selectedTab == 1
+                                    ? Border.all(
+                                        color:
+                                            Colors.blueAccent.withOpacity(0.5))
+                                    : null,
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.notifications_active_rounded, color: selectedTab == 1 ? Colors.blueAccent : Colors.white60, size: 15),
+                                  Icon(Icons.notifications_active_rounded,
+                                      color: selectedTab == 1
+                                          ? Colors.blueAccent
+                                          : Colors.white60,
+                                      size: 15),
                                   const SizedBox(width: 4),
                                   Text(
                                     '通知',
                                     style: TextStyle(
-                                      color: selectedTab == 1 ? Colors.white : Colors.white60,
-                                      fontWeight: selectedTab == 1 ? FontWeight.bold : FontWeight.normal,
+                                      color: selectedTab == 1
+                                          ? Colors.white
+                                          : Colors.white60,
+                                      fontWeight: selectedTab == 1
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
                                       fontSize: 13,
                                     ),
                                   ),
                                   const SizedBox(width: 4),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 1),
                                     decoration: BoxDecoration(
-                                      color: selectedTab == 1 ? Colors.blueAccent : Colors.white24,
+                                      color: selectedTab == 1
+                                          ? Colors.blueAccent
+                                          : Colors.white24,
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Text(
                                       '${notifications.length}',
-                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                 ],
@@ -1375,19 +1646,21 @@ class DashboardPage extends StatelessWidget {
                           // Collapse Button
                           TvFocusHelper(
                             onTap: () {
-                              robotController.isAlarmsCollapsed.value = !robotController.isAlarmsCollapsed.value;
+                              robotController.isAlarmsCollapsed.value =
+                                  !robotController.isAlarmsCollapsed.value;
                             },
                             borderRadius: BorderRadius.circular(8),
                             focusColor: Colors.white30,
                             child: const Padding(
                               padding: EdgeInsets.all(4.0),
-                              child: Icon(Icons.keyboard_arrow_right_rounded, color: Colors.white70, size: 20),
+                              child: Icon(Icons.keyboard_arrow_right_rounded,
+                                  color: Colors.white70, size: 20),
                             ),
                           ),
                         ],
                       ),
               ),
-              
+
               // List Content
               if (!isCollapsed)
                 Expanded(
@@ -1397,77 +1670,123 @@ class DashboardPage extends StatelessWidget {
                           ? const Center(
                               child: Padding(
                                 padding: EdgeInsets.all(20.0),
-                                child: Text('暂无告警数据', style: TextStyle(color: Colors.white38, fontSize: 13)),
+                                child: Text('暂无告警数据',
+                                    style: TextStyle(
+                                        color: Colors.white38, fontSize: 13)),
                               ),
                             )
                           : ListView.separated(
                               padding: const EdgeInsets.all(12),
                               itemCount: alarms.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 10),
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 10),
                               itemBuilder: (context, index) {
                                 final alarm = alarms[alarms.length - 1 - index];
-                                final timeStr = DateFormat('HH:mm:ss').format(alarm.time);
-                                
+                                final timeStr =
+                                    DateFormat('HH:mm:ss').format(alarm.time);
+
                                 return Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: Colors.white.withOpacity(0.03),
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.white.withOpacity(0.05)),
+                                    border: Border.all(
+                                        color: Colors.white.withOpacity(0.05)),
                                   ),
                                   child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
                                         child: TvFocusHelper(
                                           onTap: () {
-                                            Get.to(() => RobotDetailPage(robotId: alarm.robotId));
+                                            Get.to(() => RobotDetailPage(
+                                                robotId: alarm.robotId));
                                           },
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
                                           focusColor: Colors.redAccent,
                                           child: Padding(
                                             padding: const EdgeInsets.all(4.0),
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   alarm.organization,
                                                   maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w500),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                      color: Colors.white70,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w500),
                                                 ),
                                                 const SizedBox(height: 2),
                                                 Text(
                                                   'SN: ${alarm.robotId}',
-                                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                                                  style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w700),
                                                 ),
                                                 const SizedBox(height: 6),
                                                 Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
                                                   decoration: BoxDecoration(
-                                                    color: Colors.redAccent.withOpacity(0.1),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                    border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
+                                                    color: Colors.redAccent
+                                                        .withOpacity(0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
+                                                    border: Border.all(
+                                                        color: Colors.redAccent
+                                                            .withOpacity(0.2)),
                                                   ),
                                                   child: Text(
                                                     alarm.alarmTitle,
-                                                    style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
+                                                    style: const TextStyle(
+                                                        color: Colors.redAccent,
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w600),
                                                   ),
                                                 ),
-                                                if (alarm.imgUrl != null && alarm.imgUrl!.isNotEmpty) ...[
+                                                if (alarm.imgUrl != null &&
+                                                    alarm.imgUrl!
+                                                        .isNotEmpty) ...[
                                                   const SizedBox(height: 8),
                                                   GestureDetector(
                                                     onTap: () {
-                                                      _showLargeImageDialog(context, alarm.imgUrl!);
+                                                      _showLargeImageDialog(
+                                                          context,
+                                                          alarm.imgUrl!);
                                                     },
                                                     child: ClipRRect(
-                                                      borderRadius: BorderRadius.circular(8),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8),
                                                       child: Image.network(
-                                                        alarm.imgUrl!.startsWith('http') ? alarm.imgUrl! : 'https://huaxi-1330823579.cos.ap-shanghai.myqcloud.com/robot' + alarm.imgUrl!.trim(),
+                                                        alarm.imgUrl!
+                                                                .startsWith(
+                                                                    'http')
+                                                            ? alarm.imgUrl!
+                                                            : 'https://huaxi-1330823579.cos.ap-shanghai.myqcloud.com/robot' +
+                                                                alarm.imgUrl!
+                                                                    .trim(),
                                                         width: 120,
                                                         height: 80,
                                                         fit: BoxFit.cover,
-                                                        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                                                        errorBuilder: (context,
+                                                                error,
+                                                                stackTrace) =>
+                                                            const SizedBox
+                                                                .shrink(),
                                                       ),
                                                     ),
                                                   ),
@@ -1475,11 +1794,17 @@ class DashboardPage extends StatelessWidget {
                                                 const SizedBox(height: 6),
                                                 Row(
                                                   children: [
-                                                    const Icon(Icons.access_time_rounded, color: Colors.white30, size: 12),
+                                                    const Icon(
+                                                        Icons
+                                                            .access_time_rounded,
+                                                        color: Colors.white30,
+                                                        size: 12),
                                                     const SizedBox(width: 4),
                                                     Text(
                                                       timeStr,
-                                                      style: const TextStyle(color: Colors.white30, fontSize: 11),
+                                                      style: const TextStyle(
+                                                          color: Colors.white30,
+                                                          fontSize: 11),
                                                     ),
                                                   ],
                                                 ),
@@ -1491,13 +1816,15 @@ class DashboardPage extends StatelessWidget {
                                       const SizedBox(width: 8),
                                       TvFocusHelper(
                                         onTap: () {
-                                          robotController.removeActiveAlarm(alarm);
+                                          robotController
+                                              .removeActiveAlarm(alarm);
                                         },
                                         borderRadius: BorderRadius.circular(8),
                                         focusColor: Colors.redAccent,
                                         child: const Padding(
                                           padding: EdgeInsets.all(4.0),
-                                          child: Icon(Icons.close, color: Colors.white54, size: 16),
+                                          child: Icon(Icons.close,
+                                              color: Colors.white54, size: 16),
                                         ),
                                       ),
                                     ],
@@ -1510,78 +1837,121 @@ class DashboardPage extends StatelessWidget {
                           ? const Center(
                               child: Padding(
                                 padding: EdgeInsets.all(20.0),
-                                child: Text('暂无通知数据', style: TextStyle(color: Colors.white38, fontSize: 13)),
+                                child: Text('暂无通知数据',
+                                    style: TextStyle(
+                                        color: Colors.white38, fontSize: 13)),
                               ),
                             )
                           : ListView.separated(
                               padding: const EdgeInsets.all(12),
                               itemCount: notifications.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 10),
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 10),
                               itemBuilder: (context, index) {
-                                final item = notifications[notifications.length - 1 - index];
-                                final timeStr = DateFormat('HH:mm:ss').format(item.time);
+                                final item = notifications[
+                                    notifications.length - 1 - index];
+                                final timeStr =
+                                    DateFormat('HH:mm:ss').format(item.time);
 
                                 return Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: Colors.white.withOpacity(0.03),
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.blueAccent.withOpacity(0.2)),
+                                    border: Border.all(
+                                        color:
+                                            Colors.blueAccent.withOpacity(0.2)),
                                   ),
                                   child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
                                         child: TvFocusHelper(
                                           onTap: () {
-                                            Get.to(() => RobotDetailPage(robotId: item.robotId, autoShowTodeskDialog: true));
+                                            Get.to(() => RobotDetailPage(
+                                                robotId: item.robotId,
+                                                autoShowTodeskDialog: true));
                                           },
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
                                           focusColor: Colors.blueAccent,
                                           child: Padding(
                                             padding: const EdgeInsets.all(4.0),
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Row(
                                                   children: [
                                                     Expanded(
                                                       child: Text(
-                                                        item.organization.isNotEmpty ? item.organization : '设备 ${item.robotId}',
+                                                        item.organization
+                                                                .isNotEmpty
+                                                            ? item.organization
+                                                            : '设备 ${item.robotId}',
                                                         maxLines: 1,
-                                                        overflow: TextOverflow.ellipsis,
-                                                        style: const TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: const TextStyle(
+                                                            color: Colors
+                                                                .blueAccent,
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .bold),
                                                       ),
                                                     ),
                                                     Text(
                                                       timeStr,
-                                                      style: const TextStyle(color: Colors.white30, fontSize: 11),
+                                                      style: const TextStyle(
+                                                          color: Colors.white30,
+                                                          fontSize: 11),
                                                     ),
                                                   ],
                                                 ),
                                                 const SizedBox(height: 4),
                                                 Text(
                                                   'SN: ${item.robotId}',
-                                                  style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                                                  style: const TextStyle(
+                                                      color: Colors.white70,
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w600),
                                                 ),
                                                 const SizedBox(height: 6),
                                                 Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
                                                   decoration: BoxDecoration(
-                                                    color: Colors.blueAccent.withOpacity(0.12),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                    border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+                                                    color: Colors.blueAccent
+                                                        .withOpacity(0.12),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
+                                                    border: Border.all(
+                                                        color: Colors.blueAccent
+                                                            .withOpacity(0.3)),
                                                   ),
                                                   child: Text(
                                                     item.title,
-                                                    style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 12, fontWeight: FontWeight.w600),
+                                                    style: const TextStyle(
+                                                        color: Colors
+                                                            .lightBlueAccent,
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w600),
                                                   ),
                                                 ),
                                                 const SizedBox(height: 6),
-                                                 Text(
-                                                   item.message,
-                                                   style: const TextStyle(color: Colors.white70, fontSize: 12),
-                                                 ),
+                                                Text(
+                                                  item.message,
+                                                  style: const TextStyle(
+                                                      color: Colors.white70,
+                                                      fontSize: 12),
+                                                ),
                                               ],
                                             ),
                                           ),
@@ -1590,15 +1960,20 @@ class DashboardPage extends StatelessWidget {
                                       const SizedBox(width: 8),
                                       TvFocusHelper(
                                         onTap: () {
-                                          robotController.notifications.removeAt(notifications.length - 1 - index);
-                                          robotController.notifications.refresh();
+                                          robotController.notifications
+                                              .removeAt(notifications.length -
+                                                  1 -
+                                                  index);
+                                          robotController.notifications
+                                              .refresh();
                                           robotController.saveRobots();
                                         },
                                         borderRadius: BorderRadius.circular(8),
                                         focusColor: Colors.blueAccent,
                                         child: const Padding(
                                           padding: EdgeInsets.all(4.0),
-                                          child: Icon(Icons.close, color: Colors.white54, size: 16),
+                                          child: Icon(Icons.close,
+                                              color: Colors.white54, size: 16),
                                         ),
                                       ),
                                     ],

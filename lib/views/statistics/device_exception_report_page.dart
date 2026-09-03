@@ -210,7 +210,6 @@ class DeviceExceptionReportPage extends StatelessWidget {
 
               // Refresh Status & Force Refresh Button
               Obx(() {
-                final isAuto = controller.selectedDimension.value == TimeDimension.today;
                 final isUpdating = controller.isLoading.value || controller.isRefreshing.value;
                 final lastTime = controller.lastUpdateTime.value;
                 final lastTimeStr = lastTime != null ? DateFormat('HH:mm:ss').format(lastTime) : '--:--:--';
@@ -218,49 +217,6 @@ class DeviceExceptionReportPage extends StatelessWidget {
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Auto-refresh badge (only show when active on today)
-                    if (!isSmallScreen && isAuto) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: const Color(0xFF10B981).withOpacity(0.3),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Color(0xFF10B981),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Color(0xFF10B981),
-                                    blurRadius: 4,
-                                    spreadRadius: 1,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            const Text(
-                              '今日数据自动刷新 (1分钟/次)',
-                              style: TextStyle(
-                                color: Color(0xFF34D399),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-
                     // Manual Force Refresh Button
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
