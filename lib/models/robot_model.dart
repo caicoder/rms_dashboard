@@ -228,6 +228,14 @@ class RobotModel {
   bool hasFallAlarm;
   bool isFavorite; // 收藏属性
 
+  // 语音播报与通知个性化配置 (按 SN)
+  bool enableTts; // 当前 SN 语音播报总开关
+  bool enableEstopTts; // 急停是否播报语音
+  bool enableEstopNotification; // 急停是否发系统/弹窗通知
+  bool enableStuckTts; // 疑似停止不动是否播报语音
+  bool enableStuckNotification; // 疑似停止不动是否发系统/弹窗通知
+  double stuckDistanceThreshold; // 疑似停止不动判定距离阈值 (单位: 米，默认 0.5)
+
   // Caching specific histories
   Map<String, PatrolSession> patrolHistory;
   List<AlarmEvent> alarmHistory;
@@ -303,6 +311,12 @@ class RobotModel {
     this.patrolInfo = '',
     this.hasFallAlarm = false,
     this.isFavorite = false,
+    this.enableTts = true,
+    this.enableEstopTts = true,
+    this.enableEstopNotification = true,
+    this.enableStuckTts = true,
+    this.enableStuckNotification = true,
+    this.stuckDistanceThreshold = 0.5,
     Map<String, PatrolSession>? patrolHistory,
     List<AlarmEvent>? alarmHistory,
     List<HealthMeasurement>? healthHistory,
@@ -335,6 +349,12 @@ class RobotModel {
     'patrolInfo': patrolInfo,
     'hasFallAlarm': hasFallAlarm,
     'isFavorite': isFavorite,
+    'enableTts': enableTts,
+    'enableEstopTts': enableEstopTts,
+    'enableEstopNotification': enableEstopNotification,
+    'enableStuckTts': enableStuckTts,
+    'enableStuckNotification': enableStuckNotification,
+    'stuckDistanceThreshold': stuckDistanceThreshold,
     'patrolHistory': patrolHistory.map((k, v) => MapEntry(k, v.toJson())),
     'alarmHistory': alarmHistory.map((e) => e.toJson()).toList(),
     'healthHistory': healthHistory.map((e) => e.toJson()).toList(),
@@ -363,6 +383,12 @@ class RobotModel {
     patrolInfo: json['patrolInfo'] ?? '',
     hasFallAlarm: json['hasFallAlarm'] ?? false,
     isFavorite: json['isFavorite'] ?? false,
+    enableTts: json['enableTts'] ?? true,
+    enableEstopTts: json['enableEstopTts'] ?? true,
+    enableEstopNotification: json['enableEstopNotification'] ?? true,
+    enableStuckTts: json['enableStuckTts'] ?? true,
+    enableStuckNotification: json['enableStuckNotification'] ?? true,
+    stuckDistanceThreshold: (json['stuckDistanceThreshold'] as num?)?.toDouble() ?? 0.5,
     patrolHistory: json['patrolHistory'] is Map
         ? (json['patrolHistory'] as Map<String, dynamic>).map((k, e) => MapEntry(k, PatrolSession.fromJson(e)))
         : (json['patrolHistory'] is List

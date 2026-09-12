@@ -391,7 +391,7 @@ class RobotController extends GetxController {
         }
 
         // ==========================================
-        // 1. 急停触发检测：与上个心跳比对，如果新触发急停，发起本地通知与 TTS 语音播报
+        // 1. 急停触发检测：与上个心跳比对，如果新触发急停，根据配置发起本地通知与 TTS 语音播报
         // ==========================================
         if (!prevEstop && currentEstop) {
           final lastEstopAlert = _lastEstopNotifyTime[robot.id];
@@ -404,8 +404,12 @@ class RobotController extends GetxController {
             final body = '在 X: $xStr, Y: $yStr 触发急停';
             final ttsText = '$orgName在坐标$xStr, $yStr触发急停';
 
-            NotificationHelper().showNotification(title, body);
-            OnlinePlayer.instance.playTTSWait(ttsText);
+            if (robot.enableEstopNotification) {
+              NotificationHelper().showNotification(title, body);
+            }
+            if (robot.enableTts && robot.enableEstopTts) {
+              OnlinePlayer.instance.playTTSWait(ttsText);
+            }
 
             notifications.add(NotificationMessageItem(
               robotId: robot.id,
@@ -437,7 +441,7 @@ class RobotController extends GetxController {
         //    - type != 0 (非空闲状态)
         //    - taskList 全为 0 (如 [0,0,0,0,0])
         //    - 连续校验最近 5 分钟内的「所有心跳点」：
-        //      必须「全程所有点」与当前坐标距离均 < 0.5 米（排除中间曾运动离开、循环路线又绕回原点的误报）
+        //      必须「全程所有点」与当前坐标距离均 < stuckDistanceThreshold (默认 0.5 米，支持按设备设置)
         // ==========================================
         if (robot.type != 0 && (robot.taskList.isEmpty || robot.taskList.every((e) => e == 0))) {
           // 提取最近 5 分钟内 (300 秒内) 的所有历史轨迹心跳点
@@ -456,13 +460,14 @@ class RobotController extends GetxController {
               (now.difference(recent5MinPoints.last.time).inSeconds >= 260 || recent5MinPoints.length >= 5);
 
           if (hasEnoughDuration) {
-            // 逐一校验 5 分钟内的每一个历史心跳点：是否全部在当前位置 0.5 米范围内
+            final double threshold = robot.stuckDistanceThreshold;
+            // 逐一校验 5 分钟内的每一个历史心跳点：是否全部在当前位置 threshold 米范围内
             bool isAllStuck = true;
             for (var p in recent5MinPoints) {
               final dx = robot.positionX - p.x;
               final dy = robot.positionY - p.y;
               final distance = sqrt(dx * dx + dy * dy);
-              if (distance >= 0.5) {
+              if (distance >= threshold) {
                 isAllStuck = false; // 期间曾运动离开过该区域，非静止卡住
                 break;
               }
@@ -481,14 +486,18 @@ class RobotController extends GetxController {
                 final body = '在 $xStr  $yStr  的坐标';
                 final ttsText = '$orgName在${taskName}中疑似停止不动，在坐标$xStr, $yStr，请及时处理，谢谢';
 
-                NotificationHelper().showNotification(title, body);
-                OnlinePlayer.instance.playTTSWait(ttsText);
+                if (robot.enableStuckNotification) {
+                  NotificationHelper().showNotification(title, body);
+                }
+                if (robot.enableTts && robot.enableStuckTts) {
+                  OnlinePlayer.instance.playTTSWait(ttsText);
+                }
 
                 notifications.add(NotificationMessageItem(
                   robotId: robot.id,
                   organization: robot.organization,
                   title: '$orgName 在${taskName}中疑似停止不动',
-                  message: '在坐标 X: $xStr, Y: $yStr 移动距离小于0.5米',
+                  message: '在坐标 X: $xStr, Y: $yStr 移动距离小于${threshold.toStringAsFixed(2)}米',
                   time: now,
                 ));
 
@@ -498,7 +507,7 @@ class RobotController extends GetxController {
                   robotId: robot.id,
                   organization: robot.organization.isNotEmpty ? robot.organization : '未知机构',
                   title: '$orgName 在${taskName}中疑似停止不动',
-                  message: '在坐标 X: $xStr, Y: $yStr 连续 5 分钟移动距离小于 0.5 米',
+                  message: '在坐标 X: $xStr, Y: $yStr 连续 5 分钟移动距离小于 ${threshold.toStringAsFixed(2)} 米',
                   type: AnomalyType.stuck,
                   time: now,
                   positionX: robot.positionX,
@@ -1144,5 +1153,31 @@ class RobotController extends GetxController {
       saveRobots();
     }
   }
+
+  /// 更新设备的语音播报、急停/疑似不动通知开关及判定距离阈值（按 SN 持久化）
+  void updateRobotNotificationSettings(
+    String sn, {
+    bool? enableTts,
+    bool? enableEstopTts,
+    bool? enableEstopNotification,
+    bool? enableStuckTts,
+    bool? enableStuckNotification,
+    double? stuckDistanceThreshold,
+  }) {
+    var robot = _robotsMap[sn] ?? robots.firstWhereOrNull((r) => r.id == sn);
+    if (robot != null) {
+      _robotsMap[sn] = robot;
+      if (enableTts != null) robot.enableTts = enableTts;
+      if (enableEstopTts != null) robot.enableEstopTts = enableEstopTts;
+      if (enableEstopNotification != null) robot.enableEstopNotification = enableEstopNotification;
+      if (enableStuckTts != null) robot.enableStuckTts = enableStuckTts;
+      if (enableStuckNotification != null) robot.enableStuckNotification = enableStuckNotification;
+      if (stuckDistanceThreshold != null) robot.stuckDistanceThreshold = stuckDistanceThreshold;
+
+      robots.refresh();
+      saveRobots();
+    }
+  }
 }
+
 

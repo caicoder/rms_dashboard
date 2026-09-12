@@ -823,6 +823,340 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
     );
   }
 
+  void _showDeviceSettingsDialog(BuildContext context, RobotModel robot) {
+    bool enableTts = robot.enableTts;
+    bool enableEstopTts = robot.enableEstopTts;
+    bool enableEstopNotification = robot.enableEstopNotification;
+    bool enableStuckTts = robot.enableStuckTts;
+    bool enableStuckNotification = robot.enableStuckNotification;
+    double stuckDistanceThreshold = robot.stuckDistanceThreshold;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E293B),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.white.withOpacity(0.1)),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF3B82F6).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.tune_rounded, color: Color(0xFF60A5FA), size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        '设备播报与检测设置',
+                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'SN: ${robot.id} · ${robot.displayName}',
+                        style: const TextStyle(color: Colors.white54, fontSize: 12, fontFamily: 'monospace'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ===== 语音播报设置 =====
+                    _buildSettingsSectionHeader(
+                      icon: Icons.record_voice_over_rounded,
+                      title: 'TTS 语音播报设置',
+                      subtitle: '针对当前设备是否发声朗读提醒',
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.04),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      ),
+                      child: Column(
+                        children: [
+                          SwitchListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            activeColor: const Color(0xFF3B82F6),
+                            title: const Text('当前 SN 语音播报总开关', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                            subtitle: Text(
+                              enableTts ? '已开启（将播报下方允许的语音事件）' : '已完全关闭（当前设备所有事件均不播报语音）',
+                              style: TextStyle(color: enableTts ? Colors.white60 : Colors.orangeAccent, fontSize: 12),
+                            ),
+                            value: enableTts,
+                            onChanged: (val) {
+                              setDialogState(() {
+                                enableTts = val;
+                              });
+                            },
+                          ),
+                          Divider(height: 1, color: Colors.white.withOpacity(0.06)),
+                          SwitchListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                            activeColor: const Color(0xFF3B82F6),
+                            title: const Text('急停触发语音播报', style: TextStyle(color: Colors.white, fontSize: 13)),
+                            subtitle: const Text('设备触发急停时播报语音提醒', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                            value: enableTts && enableEstopTts,
+                            onChanged: enableTts ? (val) {
+                              setDialogState(() {
+                                enableEstopTts = val;
+                              });
+                            } : null,
+                          ),
+                          Divider(height: 1, color: Colors.white.withOpacity(0.06)),
+                          SwitchListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                            activeColor: const Color(0xFF3B82F6),
+                            title: const Text('疑似停止不动语音播报', style: TextStyle(color: Colors.white, fontSize: 13)),
+                            subtitle: const Text('连续5分钟位移小于设定阈值时播报提醒', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                            value: enableTts && enableStuckTts,
+                            onChanged: enableTts ? (val) {
+                              setDialogState(() {
+                                enableStuckTts = val;
+                              });
+                            } : null,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // ===== 系统弹窗通知设置 =====
+                    _buildSettingsSectionHeader(
+                      icon: Icons.notifications_active_rounded,
+                      title: '系统弹窗通知',
+                      subtitle: '控制是否弹出操作系统本地通知消息',
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.04),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      ),
+                      child: Column(
+                        children: [
+                          SwitchListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                            activeColor: const Color(0xFF10B981),
+                            title: const Text('急停弹窗通知', style: TextStyle(color: Colors.white, fontSize: 13)),
+                            subtitle: const Text('触发急停时弹出系统通知', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                            value: enableEstopNotification,
+                            onChanged: (val) {
+                              setDialogState(() {
+                                enableEstopNotification = val;
+                              });
+                            },
+                          ),
+                          Divider(height: 1, color: Colors.white.withOpacity(0.06)),
+                          SwitchListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                            activeColor: const Color(0xFF10B981),
+                            title: const Text('疑似停止不动弹窗通知', style: TextStyle(color: Colors.white, fontSize: 13)),
+                            subtitle: const Text('连续5分钟位移小于阈值时弹出系统通知', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                            value: enableStuckNotification,
+                            onChanged: (val) {
+                              setDialogState(() {
+                                enableStuckNotification = val;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // ===== 疑似停止不动距离阈值配置 =====
+                    _buildSettingsSectionHeader(
+                      icon: Icons.social_distance_rounded,
+                      title: '疑似停止不动判定距离阈值',
+                      subtitle: '连续 5 分钟内所有心跳坐标位移均小于此距离即触发疑似不动预警',
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.04),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                '判定位移阈值:',
+                                style: TextStyle(color: Colors.white70, fontSize: 13),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF3B82F6).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.4)),
+                                ),
+                                child: Text(
+                                  '${stuckDistanceThreshold.toStringAsFixed(2)} 米',
+                                  style: const TextStyle(
+                                    color: Color(0xFF60A5FA),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Text('0.1m', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                              Expanded(
+                                child: Slider(
+                                  value: stuckDistanceThreshold.clamp(0.1, 5.0),
+                                  min: 0.1,
+                                  max: 5.0,
+                                  divisions: 49,
+                                  activeColor: const Color(0xFF3B82F6),
+                                  inactiveColor: Colors.white12,
+                                  label: '${stuckDistanceThreshold.toStringAsFixed(2)}m',
+                                  onChanged: (val) {
+                                    setDialogState(() {
+                                      stuckDistanceThreshold = double.parse(val.toStringAsFixed(2));
+                                    });
+                                  },
+                                ),
+                              ),
+                              const Text('5.0m', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [0.2, 0.5, 1.0, 1.5, 2.0].map((preset) {
+                              final isSelected = (stuckDistanceThreshold - preset).abs() < 0.01;
+                              return ChoiceChip(
+                                label: Text('$preset 米${preset == 0.5 ? " (默认)" : ""}'),
+                                selected: isSelected,
+                                selectedColor: const Color(0xFF3B82F6),
+                                backgroundColor: Colors.white.withOpacity(0.06),
+                                labelStyle: TextStyle(
+                                  color: isSelected ? Colors.white : Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                ),
+                                onSelected: (_) {
+                                  setDialogState(() {
+                                    stuckDistanceThreshold = preset;
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  setDialogState(() {
+                    enableTts = true;
+                    enableEstopTts = true;
+                    enableEstopNotification = true;
+                    enableStuckTts = true;
+                    enableStuckNotification = true;
+                    stuckDistanceThreshold = 0.5;
+                  });
+                },
+                child: const Text('恢复默认', style: TextStyle(color: Colors.white38)),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('取消', style: TextStyle(color: Colors.white54)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3B82F6),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () {
+                  robotController.updateRobotNotificationSettings(
+                    robot.id,
+                    enableTts: enableTts,
+                    enableEstopTts: enableEstopTts,
+                    enableEstopNotification: enableEstopNotification,
+                    enableStuckTts: enableStuckTts,
+                    enableStuckNotification: enableStuckNotification,
+                    stuckDistanceThreshold: stuckDistanceThreshold,
+                  );
+                  Navigator.pop(ctx);
+                  ToastUtil.show('播报与检测设置已保存 (SN: ${robot.id})');
+                },
+                child: const Text('保存设置'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSettingsSectionHeader({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: const Color(0xFF60A5FA), size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                subtitle,
+                style: const TextStyle(color: Colors.white38, fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -900,6 +1234,20 @@ class _RobotDetailPageState extends State<RobotDetailPage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF334155),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      elevation: 2,
+                    ),
+                    icon: const Icon(Icons.tune_rounded, size: 18),
+                    label: const Text('播报设置', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                    onPressed: () => _showDeviceSettingsDialog(context, robot),
+                  ),
+                  const SizedBox(width: 10),
                   if (todeskConfig != null && (todeskConfig['clientid']?.toString().isNotEmpty ?? false)) ...[
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(

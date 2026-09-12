@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_windows
   desktop_webview_window
   flutter_secure_storage_windows
+  flutter_tts
   iris_method_channel
   local_notifier
   shengwang_rtc_engine
