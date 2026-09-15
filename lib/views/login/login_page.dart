@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:desktop_webview_window/desktop_webview_window.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../config/ding_auth_config.dart';
 import '../../controllers/auth_controller.dart';
 import '../widgets/tv_focus_helper.dart';
@@ -64,10 +65,17 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
   void _openDesktopWebView(String url) async {
     try {
+      String userDataFolder = 'webview_window_WebView2';
+      if (UniversalPlatform.isWindows) {
+        final appDir = await getApplicationSupportDirectory();
+        userDataFolder = '${appDir.path}\\webview_data';
+      }
+
       final webview = await WebviewWindow.create(
-        configuration: const CreateConfiguration(
+        configuration: CreateConfiguration(
           title: "钉钉员工验证登录",
           titleBarTopPadding: 0,
+          userDataFolderWindows: userDataFolder,
         ),
       );
       
