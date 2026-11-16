@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/ding_auth_config.dart';
 import '../views/dashboard/dashboard_page.dart';
+import '../views/login/welcome_dialog.dart';
 import '../utils/sp_util.dart';
 import '../utils/http_util.dart';
 import '../utils/huaxi_util.dart';
@@ -14,6 +15,7 @@ class AuthController extends GetxController {
   final RxBool isLoggedIn = false.obs;
   final RxString userId = ''.obs;
   final RxString userName = ''.obs;
+  final RxString userMobile = ''.obs;
 
   @override
   void onInit() {
@@ -32,6 +34,7 @@ class AuthController extends GetxController {
       if (token != null && token.isNotEmpty && loginDate == todayStr) {
         userId.value = prefs.getString("user_id") ?? '';
         userName.value = prefs.getString("user_name") ?? '';
+        userMobile.value = prefs.getString("user_mobile") ?? '';
 
         // 恢复登录请求所需的 Header
         final loginInfo = await SPUtil.getLoginInfo();
@@ -60,27 +63,21 @@ class AuthController extends GetxController {
   }
 
   Future<void> loginWithMockedBackend(String code) async {
+    Get.dialog(
+      const Center(child: CircularProgressIndicator()),
+      barrierDismissible: false,
+    );
     try {
-      Get.dialog(
-        const Center(child: CircularProgressIndicator()),
-        barrierDismissible: false,
-      );
-      
-      await Future.delayed(const Duration(seconds: 2));
-      
-      // Close loading dialog
-      if (Get.isDialogOpen ?? false) {
-        Get.back();
-      }
-
       // ==========================================
-      // 【钉钉 OAuth2.0 登录机制】
-      // 默认使用 Mock 测试数据（白名单中的 ID）
-      String returnedUserId = "185704456832568076";
-      String mockUserName = "内部员工";
+      // 【钉钉 OAuth2.0 登录】
+      // ==========================================
+      String returnedUserId = '';
+      String mockUserName = '内部员工';
+      String mockUserMobile = '';
+      String errorDetail = '';
 
       // 1. 【推荐标准方案】通过自己的后端中转 code 向钉钉换取用户信息
-      if (!DingAuthConfig.backendDingLoginApi.contains("your-backend.com")) {
+      if (DingAuthConfig.backendDingLoginApi.trim().isNotEmpty) {
         try {
           final res = await Dio().post(
             DingAuthConfig.backendDingLoginApi,
@@ -90,17 +87,24 @@ class AuthController extends GetxController {
           if (res.data != null) {
             final dataObj = res.data["data"] ?? res.data;
             returnedUserId = dataObj["userId"]?.toString() ?? returnedUserId;
-            mockUserName = (dataObj["name"] ?? dataObj["nick"])?.toString() ?? mockUserName;
+            mockUserName =
+                (dataObj["name"] ?? dataObj["nick"])?.toString() ?? mockUserName;
+            mockUserMobile = (dataObj["mobile"] ??
+                    dataObj["phone"] ??
+                    dataObj["mobilePhone"])
+                ?.toString() ??
+                mockUserMobile;
           }
         } catch (dioError) {
-          debugPrint("后端登录中转接口请求失败: $dioError");
+          errorDetail = '后端登录中转接口请求失败: $dioError';
+          debugPrint(errorDetail);
         }
-      } 
-      // 2. 【测试直连模式】配置了 appSecret 时，客户端直接向钉钉 OpenAPI 换取用户信息
+      }
+      // 2. 【客户端直连模式】配置了 Client Secret 时，直接向钉钉 OpenAPI 换取用户信息
       else if (DingAuthConfig.appSecret.isNotEmpty) {
+        String accessToken = '';
         try {
           debugPrint("正在请求 userAccessToken，code: $code");
-          // 第一步：用 code 换取 userAccessToken
           final tokenResp = await Dio().post(
             "https://api.dingtalk.com/v1.0/oauth2/userAccessToken",
             data: {
@@ -110,109 +114,206 @@ class AuthController extends GetxController {
               "grantType": "authorization_code",
             },
           );
-          debugPrint("userAccessToken 成功返回: ${tokenResp.data}");
-          final String accessToken = tokenResp.data["accessToken"] ?? "";
+          debugPrint("userAccessToken 返回: ${tokenResp.data}");
+          accessToken = tokenResp.data["accessToken"] ?? "";
+          if (accessToken.isEmpty) {
+            errorDetail = '未获取到 accessToken: ${tokenResp.data}';
+          }
+        } catch (dingError) {
+          if (dingError is DioException) {
+            errorDetail =
+                '钉钉授权失败(${dingError.response?.statusCode}): ${dingError.response?.data}';
+          } else {
+            errorDetail = '钉钉授权失败: $dingError';
+          }
+          debugPrint(errorDetail);
+        }
 
-          if (accessToken.isNotEmpty) {
-            debugPrint("正在请求 contact/users/me 获取个人信息");
-            // 第二步：用 userAccessToken 获取用户个人信息 (userId, nick/name)
+        if (accessToken.isNotEmpty) {
+          // 2.1 新版接口：获取用户个人信息（需要 Contact.User.Read 权限）
+          try {
             final userResp = await Dio().get(
               "https://api.dingtalk.com/v1.0/contact/users/me",
               options: Options(headers: {
                 "x-acs-dingtalk-access-token": accessToken,
               }),
             );
-            debugPrint("contact/users/me 成功返回: ${userResp.data}");
+            debugPrint("contact/users/me 返回: ${userResp.data}");
             final userJson = userResp.data;
             if (userJson != null) {
-              returnedUserId = (userJson["userId"] ?? userJson["unionId"] ?? userJson["openId"])?.toString() ?? returnedUserId;
-              mockUserName = (userJson["nick"] ?? userJson["name"])?.toString() ?? mockUserName;
+              returnedUserId = (userJson["userId"] ??
+                      userJson["unionId"] ??
+                      userJson["openId"])
+                  ?.toString() ??
+                  returnedUserId;
+              mockUserName =
+                  (userJson["nick"] ?? userJson["name"])?.toString() ??
+                      mockUserName;
+              mockUserMobile = (userJson["mobile"] ??
+                      userJson["phone"] ??
+                      userJson["mobilePhone"])
+                  ?.toString() ??
+                  mockUserMobile;
+            }
+          } catch (userErr) {
+            debugPrint("contact/users/me 失败（可能缺少 Contact.User.Read 权限），尝试旧版免登接口: $userErr");
+          }
+
+          // 2.2 旧版免登接口：通过企业 token + 授权码获取用户信息（无需 Contact.User.Read）
+          if (returnedUserId.isEmpty) {
+            final oldUser = await _fetchUserByOldApi(code);
+            if (oldUser != null) {
+              returnedUserId = oldUser["userid"] ?? '';
+              mockUserName = oldUser["name"]?.isNotEmpty == true
+                  ? oldUser["name"]!
+                  : mockUserName;
+              mockUserMobile = oldUser["mobile"]?.isNotEmpty == true
+                  ? oldUser["mobile"]!
+                  : mockUserMobile;
             }
           }
-        } catch (dingError) {
-          if (dingError is DioException) {
-            debugPrint("直连钉钉 OpenAPI 失败. Status: ${dingError.response?.statusCode}, Response Data: ${dingError.response?.data}, Error: $dingError");
-          } else {
-            debugPrint("直连钉钉 OpenAPI 失败: $dingError");
+
+          // 2.3 已成功换取 token（用户已授权登录），即便读不到资料也允许进入
+          if (returnedUserId.isEmpty) {
+            final short =
+                accessToken.length < 8 ? accessToken : accessToken.substring(0, 8);
+            returnedUserId = 'dingtalk_$short';
+            debugPrint('未能读取用户资料，使用 token 生成临时身份: $returnedUserId');
           }
         }
+      } else {
+        errorDetail = '未配置钉钉 AppSecret';
       }
       // ==========================================
 
-      // 验证用户是否在白名单内
-      if (DingAuthConfig.proUserIds.contains(returnedUserId)) {
-        // 白名单验证通过
-        String mockToken = "mock_token_for_testing";
-        final String todayStr = DateTime.now().toString().substring(0, 10);
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString("user_token", mockToken);
-        await prefs.setString("user_id", returnedUserId);
-        await prefs.setString("user_name", mockUserName);
-        await prefs.setString("login_date", todayStr); // 记录登录日期
+      if (returnedUserId.isEmpty) {
+        throw errorDetail.isEmpty ? '未能获取钉钉用户信息' : errorDetail;
+      }
 
-        // 更新控制器的响应式状态
-        userId.value = returnedUserId;
-        userName.value = mockUserName;
-        isLoggedIn.value = true;
-        HuaxiUtil.isLogn = true;
+      final bool allowed = !DingAuthConfig.whitelistEnabled ||
+          DingAuthConfig.proUserIds.contains(returnedUserId);
 
-        // 保存登录实体并设置请求头
-        final userEntity = UserEntity(
-          userId: returnedUserId,
-          accessToken: mockToken,
-        );
-        await SPUtil.putLoginInfo(userEntity);
-        
-        // 弹出欢迎进入的弹窗
-        Get.defaultDialog(
-          title: "欢迎进入",
-          titleStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.green),
-          content: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.green, size: 60),
-                const SizedBox(height: 16),
-                Text("欢迎回来，$mockUserName！", style: const TextStyle(fontSize: 16)),
-              ],
-            ),
-          ),
-          textConfirm: "进入系统",
-          confirmTextColor: Colors.white,
-          buttonColor: const Color(0xFF3B82F6),
-          onConfirm: () {
-            Get.back(); // 关闭弹窗
-            Get.offAll(() => DashboardPage()); // 跳转至主页
-          },
-        );
-      } else {
-        // 不在白名单中，禁止进入并显示当前获取到的姓名和ID
+      if (!allowed) {
+        if (Get.isDialogOpen ?? false) Get.back();
         Get.defaultDialog(
           title: "访问被拒绝",
-          titleStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+          titleStyle:
+              const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
           content: Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Text("对不起，账号：$mockUserName (ID: $returnedUserId) 不在允许访问的白名单列表中，请联系胡森熙添加。"),
+            child: Text(
+                "对不起，账号：$mockUserName (ID: $returnedUserId) 不在允许访问的白名单列表中，请联系管理员添加。"),
           ),
           textConfirm: "确定",
           confirmTextColor: Colors.white,
           buttonColor: Colors.red,
           onConfirm: () => Get.back(),
         );
+        return;
       }
-      
+
+      // 登录成功
+      const String token = "mock_token_for_testing";
+      final String todayStr = DateTime.now().toString().substring(0, 10);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString("user_token", token);
+      await prefs.setString("user_id", returnedUserId);
+      await prefs.setString("user_name", mockUserName);
+      await prefs.setString("user_mobile", mockUserMobile);
+      await prefs.setString("login_date", todayStr);
+
+      userId.value = returnedUserId;
+      userName.value = mockUserName;
+      userMobile.value = mockUserMobile;
+      isLoggedIn.value = true;
+      HuaxiUtil.isLogn = true;
+
+      final userEntity = UserEntity(
+        userId: returnedUserId,
+        accessToken: token,
+      );
+      await SPUtil.putLoginInfo(userEntity);
+
+      if (Get.isDialogOpen ?? false) Get.back();
+
+      // 欢迎弹窗：展示用户名 + 手机号
+      showWelcomeDialog(
+        name: mockUserName,
+        mobile: mockUserMobile,
+        onEnter: () => Get.offAll(() => DashboardPage()),
+      );
     } catch (e) {
       if (Get.isDialogOpen ?? false) {
         Get.back();
       }
       Get.snackbar(
         "登录失败",
-        "发生错误: $e",
+        e.toString(),
         snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.red,
         colorText: Colors.white,
+        duration: const Duration(seconds: 5),
       );
     }
+  }
+
+  /// 旧版免登接口：企业 access_token + 授权码 获取用户信息（无需 Contact.User.Read 权限）
+  Future<Map<String, String>?> _fetchUserByOldApi(String code) async {
+    try {
+      final tokenResp = await Dio().get(
+        "https://oapi.dingtalk.com/gettoken",
+        queryParameters: {
+          "appkey": DingAuthConfig.appKey,
+          "appsecret": DingAuthConfig.appSecret,
+        },
+      );
+      final String corpToken = tokenResp.data?["access_token"] ?? "";
+      if (corpToken.isEmpty) {
+        debugPrint("旧版免登: 获取企业 access_token 失败: ${tokenResp.data}");
+        return null;
+      }
+
+      final userResp = await Dio().post(
+        "https://oapi.dingtalk.com/topapi/v2/user/getuserinfo",
+        queryParameters: {"access_token": corpToken},
+        data: {"code": code},
+      );
+      debugPrint("旧版免登 getuserinfo 返回: ${userResp.data}");
+      final result = userResp.data?["result"];
+      if (result is Map) {
+        final userid = result["userid"]?.toString() ?? "";
+        final name = result["name"]?.toString() ?? "";
+        String mobile = "";
+
+        // 补充手机号（需要通讯录读取权限；失败不影响登录）
+        if (userid.isNotEmpty) {
+          try {
+            final detailResp = await Dio().post(
+              "https://oapi.dingtalk.com/topapi/v2/user/get",
+              queryParameters: {"access_token": corpToken},
+              data: {"userid": userid},
+            );
+            final detail = detailResp.data?["result"];
+            if (detail is Map) {
+              mobile = (detail["mobile"] ?? detail["phone"])
+                      ?.toString() ??
+                  "";
+            }
+          } catch (e) {
+            debugPrint("旧版免登: 获取手机号失败: $e");
+          }
+        }
+
+        return {
+          "userid": userid,
+          "name": name,
+          "mobile": mobile,
+        };
+      }
+    } catch (e) {
+      debugPrint("旧版免登接口失败: $e");
+    }
+    return null;
   }
 
   Future<void> logout() async {
@@ -220,10 +321,12 @@ class AuthController extends GetxController {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove("user_id");
     await prefs.remove("user_name");
+    await prefs.remove("user_mobile");
     await prefs.remove("login_date");
     await prefs.remove("user_token");
     userId.value = '';
     userName.value = '';
+    userMobile.value = '';
     isLoggedIn.value = false;
     HuaxiUtil.isLogn = false;
   }
