@@ -97,11 +97,19 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         ),
       );
       
+      bool handled = false;
       webview.addOnUrlRequestCallback((url) async {
+        if (handled) return;
         if (url.startsWith(DingAuthConfig.redirectUri)) {
+          handled = true;
           final uri = Uri.parse(url);
           final code = uri.queryParameters["code"] ?? uri.queryParameters["authCode"];
-          
+          // 延迟关闭，避免在导航回调里销毁 webview 导致插件原生层崩溃
+          Future.delayed(const Duration(milliseconds: 300), () {
+            try {
+              webview.close();
+            } catch (_) {}
+          });
           if (code != null && code.isNotEmpty) {
             await _authController.loginWithMockedBackend(code);
           } else {
@@ -111,7 +119,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
               duration: const Duration(seconds: 5)
             );
           }
-          webview.close();
         }
       });
       
@@ -131,6 +138,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       "response_type": "code",
       "client_id": DingAuthConfig.appKey,
       "scope": "openid",
+      "prompt": "consent",
       "state": DateTime.now().millisecondsSinceEpoch.toString()
     });
     final authUrl = uri.toString();
