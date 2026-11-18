@@ -47,6 +47,8 @@ flutter:
 dependency_overrides:
   package_info_plus: ^8.1.0
   ffi: ^2.1.2
+  # 固定 web 版本，避免 CI 拉到 1.1.2 后在新 Dart SDK 上编译报 toJS/jsify 错误
+  web: 1.1.1
   # 本地补丁版：去掉标题栏的第二个 Flutter 引擎，修复 Windows 打开 WebView 时闪退
   desktop_webview_window:
     path: third_party/desktop_webview_window
