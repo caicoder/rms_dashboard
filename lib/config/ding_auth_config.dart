@@ -2,7 +2,9 @@ class DingAuthConfig {
   // Callback URL matching DingTalk configuration
   static const String redirectUri = "https://www.huaxiai.com.cn/";
   
-  // DingTalk Credentials
+  // DingTalk Credentials（RMS 自己的企业内部应用）
+  // 需在钉钉开放平台为该应用开通：
+  //   通讯录个人信息读权限(Contact.User.Read)、个人手机号信息(Contact.User.mobile)、成员信息读权限
   static const String appId = "9505a1c4-7f04-4fa7-b31f-f998a61549d9";
   static const String agentId = "4401933793";
   static const String appKey = "dingboaqzi27igf7zidf";
