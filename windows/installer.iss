@@ -1,4 +1,4 @@
-#define MyAppName "骅羲监控"
+#define MyAppName "rms"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Huaxi"
 #define MyAppExeName "rms_dashboard.exe"
@@ -10,10 +10,13 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
+ArchitecturesAllowed=x64
+ArchitecturesInstallIn64BitMode=x64
+UsePreviousAppDir=no
 DisableProgramGroupPage=yes
 ; We output the single exe installer to build/windows/installer
 OutputDir=..\build\windows\installer
-OutputBaseFilename=骅羲监控_setup
+OutputBaseFilename=rms_setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

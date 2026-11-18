@@ -1,10 +1,10 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:desktop_webview_window/desktop_webview_window.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../config/ding_auth_config.dart';
 import '../../controllers/auth_controller.dart';
 import '../widgets/tv_focus_helper.dart';
@@ -67,8 +67,26 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     try {
       String userDataFolder = 'webview_window_WebView2';
       if (UniversalPlatform.isWindows) {
-        final appDir = await getApplicationSupportDirectory();
-        userDataFolder = '${appDir.path}\\webview_data';
+        if (!await WebviewWindow.isWebviewAvailable()) {
+          Get.snackbar(
+            "无法登录",
+            "当前系统缺少 WebView2 运行时，请安装 Microsoft Edge WebView2 Runtime 后重试",
+            backgroundColor: Colors.red,
+            colorText: Colors.white,
+            duration: const Duration(seconds: 6),
+          );
+          return;
+        }
+
+        final localAppData = Platform.environment['LOCALAPPDATA'];
+        final baseDir = (localAppData != null && localAppData.isNotEmpty)
+            ? localAppData
+            : Directory.systemTemp.path;
+        final userDataDir = Directory('$baseDir\\RMS\\webview_data');
+        if (!userDataDir.existsSync()) {
+          userDataDir.createSync(recursive: true);
+        }
+        userDataFolder = userDataDir.path;
       }
 
       final webview = await WebviewWindow.create(
