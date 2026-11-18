@@ -47,6 +47,9 @@ flutter:
 dependency_overrides:
   package_info_plus: ^8.1.0
   ffi: ^2.1.2
+  # 本地补丁版：去掉标题栏的第二个 Flutter 引擎，修复 Windows 打开 WebView 时闪退
+  desktop_webview_window:
+    path: third_party/desktop_webview_window
 
 flutter_launcher_icons:
   android: true

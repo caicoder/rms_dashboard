@@ -92,6 +92,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       final webview = await WebviewWindow.create(
         configuration: CreateConfiguration(
           title: "钉钉员工验证登录",
+          titleBarHeight: 0,
           titleBarTopPadding: 0,
           userDataFolderWindows: userDataFolder,
         ),
