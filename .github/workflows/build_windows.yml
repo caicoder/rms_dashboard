@@ -104,4 +104,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-setup-exe
-          path: build/windows/installer/骅羲监控_setup.exe
+          path: build/windows/installer/*.exe
+          if-no-files-found: error
