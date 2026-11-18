@@ -10,9 +10,6 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
-UsePreviousAppDir=no
 DisableProgramGroupPage=yes
 ; We output the single exe installer to build/windows/installer
 OutputDir=..\build\windows\installer

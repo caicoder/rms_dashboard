@@ -1,10 +1,10 @@
-import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:desktop_webview_window/desktop_webview_window.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../config/ding_auth_config.dart';
 import '../../controllers/auth_controller.dart';
 import '../widgets/tv_focus_helper.dart';
@@ -21,7 +21,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
-  final AuthController _authController = Get.put(AuthController());
+  AuthController get _authController => Get.isRegistered<AuthController>()
+      ? Get.find<AuthController>()
+      : Get.put(AuthController());
 
   @override
   void initState() {
@@ -63,49 +65,32 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     super.dispose();
   }
 
+  // 与 TRMS 完全一致
   void _openDesktopWebView(String url) async {
     try {
       String userDataFolder = 'webview_window_WebView2';
       if (UniversalPlatform.isWindows) {
-        if (!await WebviewWindow.isWebviewAvailable()) {
-          Get.snackbar(
-            "无法登录",
-            "当前系统缺少 WebView2 运行时，请安装 Microsoft Edge WebView2 Runtime 后重试",
-            backgroundColor: Colors.red,
-            colorText: Colors.white,
-            duration: const Duration(seconds: 6),
-          );
-          return;
-        }
-
-        final localAppData = Platform.environment['LOCALAPPDATA'];
-        final baseDir = (localAppData != null && localAppData.isNotEmpty)
-            ? localAppData
-            : Directory.systemTemp.path;
-        final userDataDir = Directory('$baseDir\\RMS\\webview_data');
-        if (!userDataDir.existsSync()) {
-          userDataDir.createSync(recursive: true);
-        }
-        userDataFolder = userDataDir.path;
+        final appDir = await getApplicationSupportDirectory();
+        userDataFolder = '${appDir.path}\\webview_data';
       }
 
       final webview = await WebviewWindow.create(
         configuration: CreateConfiguration(
           title: "钉钉员工验证登录",
-          titleBarHeight: 0,
           titleBarTopPadding: 0,
           userDataFolderWindows: userDataFolder,
         ),
       );
-      
+
       bool handled = false;
       webview.addOnUrlRequestCallback((url) async {
         if (handled) return;
         if (url.startsWith(DingAuthConfig.redirectUri)) {
           handled = true;
           final uri = Uri.parse(url);
-          final code = uri.queryParameters["code"] ?? uri.queryParameters["authCode"];
-          // 延迟关闭，避免在导航回调里销毁 webview 导致插件原生层崩溃
+          final code =
+              uri.queryParameters["code"] ?? uri.queryParameters["authCode"];
+          // 延迟关闭，避免 webview 销毁后仍收到导航回调导致的插件断言
           Future.delayed(const Duration(milliseconds: 300), () {
             try {
               webview.close();
@@ -114,22 +99,16 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           if (code != null && code.isNotEmpty) {
             await _authController.loginWithMockedBackend(code);
           } else {
-            Get.snackbar("登录失败", "未获取到授权Code. 参数: ${uri.queryParameters}", 
-              backgroundColor: Colors.red, 
-              colorText: Colors.white, 
-              duration: const Duration(seconds: 5)
-            );
+            Get.snackbar("登录失败", "未获取到授权 Code",
+                backgroundColor: Colors.red, colorText: Colors.white);
           }
         }
       });
-      
+
       webview.launch(url);
     } catch (e) {
-      print("Error launching desktop webview: $e");
-      Get.snackbar("错误", "无法打开桌面浏览器窗口: $e", 
-        backgroundColor: Colors.red, 
-        colorText: Colors.white
-      );
+      Get.snackbar("错误", "无法打开桌面授权窗口: $e",
+          backgroundColor: Colors.red, colorText: Colors.white);
     }
   }
 
@@ -137,7 +116,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     final uri = Uri.https("login.dingtalk.com", "/oauth2/auth", {
       "redirect_uri": DingAuthConfig.redirectUri,
       "response_type": "code",
-      "client_id": DingAuthConfig.appKey,
+      "client_id": DingAuthConfig.clientId,
       "scope": "openid",
       "prompt": "consent",
       "state": DateTime.now().millisecondsSinceEpoch.toString()

@@ -9,6 +9,9 @@ class DingAuthConfig {
   static const String agentId = "4401933793";
   static const String appKey = "dingboaqzi27igf7zidf";
   static const String appSecret = "YAhwYE1wO-hdHYfujVLtAV4M_K37S0VbJpafx687VindSzdJKT94Wx4JFBVnO0OH"; 
+  // 与 TRMS 字段命名对齐
+  static const String clientId = appKey;
+  static const String clientSecret = appSecret;
   
   // 后端中转接口（留空则客户端直连钉钉 OpenAPI）
   static const String backendDingLoginApi = "";

@@ -16,6 +16,7 @@ class AuthController extends GetxController {
   final RxString userId = ''.obs;
   final RxString userName = ''.obs;
   final RxString userMobile = ''.obs;
+  final RxBool showWelcome = false.obs;
 
   @override
   void onInit() {
@@ -74,7 +75,6 @@ class AuthController extends GetxController {
       String returnedUserId = '';
       String mockUserName = '内部员工';
       String mockUserMobile = '';
-      String unionId = '';
       String errorDetail = '';
 
       // 1. 【推荐标准方案】通过自己的后端中转 code 向钉钉换取用户信息
@@ -87,14 +87,10 @@ class AuthController extends GetxController {
           );
           if (res.data != null) {
             final dataObj = res.data["data"] ?? res.data;
-            returnedUserId = dataObj["userId"]?.toString() ?? returnedUserId;
+            returnedUserId =
+                dataObj["userId"]?.toString() ?? returnedUserId;
             mockUserName =
                 (dataObj["name"] ?? dataObj["nick"])?.toString() ?? mockUserName;
-            mockUserMobile = (dataObj["mobile"] ??
-                    dataObj["phone"] ??
-                    dataObj["mobilePhone"])
-                ?.toString() ??
-                mockUserMobile;
           }
         } catch (dioError) {
           errorDetail = '后端登录中转接口请求失败: $dioError';
@@ -102,15 +98,15 @@ class AuthController extends GetxController {
         }
       }
       // 2. 【客户端直连模式】配置了 Client Secret 时，直接向钉钉 OpenAPI 换取用户信息
-      else if (DingAuthConfig.appSecret.isNotEmpty) {
+      else if (DingAuthConfig.clientSecret.isNotEmpty) {
         String accessToken = '';
         try {
           debugPrint("正在请求 userAccessToken，code: $code");
           final tokenResp = await Dio().post(
             "https://api.dingtalk.com/v1.0/oauth2/userAccessToken",
             data: {
-              "clientId": DingAuthConfig.appKey,
-              "clientSecret": DingAuthConfig.appSecret,
+              "clientId": DingAuthConfig.clientId,
+              "clientSecret": DingAuthConfig.clientSecret,
               "code": code,
               "grantType": "authorization_code",
             },
@@ -142,15 +138,14 @@ class AuthController extends GetxController {
             debugPrint("contact/users/me 返回: ${userResp.data}");
             final userJson = userResp.data;
             if (userJson != null) {
-              unionId = userJson["unionId"]?.toString() ?? '';
               returnedUserId = (userJson["userId"] ??
                       userJson["unionId"] ??
                       userJson["openId"])
                   ?.toString() ??
                   returnedUserId;
-              mockUserName =
-                  (userJson["nick"] ?? userJson["name"])?.toString() ??
-                      mockUserName;
+              mockUserName = (userJson["nick"] ?? userJson["name"])
+                      ?.toString() ??
+                  mockUserName;
               mockUserMobile = (userJson["mobile"] ??
                       userJson["phone"] ??
                       userJson["mobilePhone"])
@@ -161,24 +156,7 @@ class AuthController extends GetxController {
             debugPrint("contact/users/me 失败（可能缺少 Contact.User.Read 权限），尝试旧版免登接口: $userErr");
           }
 
-          // 2.2 用 unionId 换取企业内真实 userId、姓名和手机号
-          //     （contact/users/me 只返回 unionId/openId，后端用户表存的是 userId）
-          if (unionId.isNotEmpty) {
-            final corpUser = await _fetchUserByUnionId(unionId);
-            if (corpUser != null) {
-              if ((corpUser["userid"] ?? '').isNotEmpty) {
-                returnedUserId = corpUser["userid"]!;
-              }
-              if ((corpUser["name"] ?? '').isNotEmpty) {
-                mockUserName = corpUser["name"]!;
-              }
-              if ((corpUser["mobile"] ?? '').isNotEmpty) {
-                mockUserMobile = corpUser["mobile"]!;
-              }
-            }
-          }
-
-          // 2.3 旧版免登接口：通过企业 token + 授权码获取用户信息（无需 Contact.User.Read）
+          // 2.2 旧版免登接口：通过企业 token + 授权码获取用户信息（无需 Contact.User.Read）
           if (returnedUserId.isEmpty) {
             final oldUser = await _fetchUserByOldApi(code);
             if (oldUser != null) {
@@ -186,13 +164,10 @@ class AuthController extends GetxController {
               mockUserName = oldUser["name"]?.isNotEmpty == true
                   ? oldUser["name"]!
                   : mockUserName;
-              mockUserMobile = oldUser["mobile"]?.isNotEmpty == true
-                  ? oldUser["mobile"]!
-                  : mockUserMobile;
             }
           }
 
-          // 2.4 已成功换取 token（用户已授权登录），即便读不到资料也允许进入
+          // 2.3 已成功换取 token（用户已授权登录），即便读不到资料也允许进入
           if (returnedUserId.isEmpty) {
             final short =
                 accessToken.length < 8 ? accessToken : accessToken.substring(0, 8);
@@ -201,7 +176,7 @@ class AuthController extends GetxController {
           }
         }
       } else {
-        errorDetail = '未配置钉钉 AppSecret';
+        errorDetail = '未配置钉钉 Client Secret';
       }
       // ==========================================
 
@@ -255,7 +230,7 @@ class AuthController extends GetxController {
 
       if (Get.isDialogOpen ?? false) Get.back();
 
-      // 欢迎弹窗：展示用户名 + 手机号
+      // 炫酷欢迎弹窗：展示用户名 + 手机号
       showWelcomeDialog(
         name: mockUserName,
         mobile: mockUserMobile,
@@ -276,73 +251,19 @@ class AuthController extends GetxController {
     }
   }
 
-  /// 获取企业内部应用的 access_token（通讯录接口使用）
-  Future<String> _getCorpAccessToken() async {
+  /// 旧版免登接口：企业 access_token + 授权码 获取用户信息（无需 Contact.User.Read 权限）
+  Future<Map<String, String>?> _fetchUserByOldApi(String code) async {
     try {
       final tokenResp = await Dio().get(
         "https://oapi.dingtalk.com/gettoken",
         queryParameters: {
-          "appkey": DingAuthConfig.appKey,
-          "appsecret": DingAuthConfig.appSecret,
+          "appkey": DingAuthConfig.clientId,
+          "appsecret": DingAuthConfig.clientSecret,
         },
       );
       final String corpToken = tokenResp.data?["access_token"] ?? "";
       if (corpToken.isEmpty) {
-        debugPrint("获取企业 access_token 失败: ${tokenResp.data}");
-      }
-      return corpToken;
-    } catch (e) {
-      debugPrint("获取企业 access_token 异常: $e");
-      return "";
-    }
-  }
-
-  /// 用 unionId 换取企业内真实 userId、姓名和手机号
-  /// 需要应用开通「成员信息读权限」和「个人手机号信息」
-  Future<Map<String, String>?> _fetchUserByUnionId(String unionId) async {
-    try {
-      final corpToken = await _getCorpAccessToken();
-      if (corpToken.isEmpty) return null;
-
-      final idResp = await Dio().post(
-        "https://oapi.dingtalk.com/topapi/user/getbyunionid",
-        queryParameters: {"access_token": corpToken},
-        data: {"unionid": unionId},
-      );
-      debugPrint("getbyunionid 返回: ${idResp.data}");
-      final userid = idResp.data?["result"]?["userid"]?.toString() ?? "";
-      if (userid.isEmpty) return null;
-
-      String name = "";
-      String mobile = "";
-      try {
-        final detailResp = await Dio().post(
-          "https://oapi.dingtalk.com/topapi/v2/user/get",
-          queryParameters: {"access_token": corpToken},
-          data: {"userid": userid},
-        );
-        debugPrint("user/get 返回: ${detailResp.data}");
-        final detail = detailResp.data?["result"];
-        if (detail is Map) {
-          name = detail["name"]?.toString() ?? "";
-          mobile = (detail["mobile"] ?? detail["phone"])?.toString() ?? "";
-        }
-      } catch (e) {
-        debugPrint("user/get 失败（可能缺少成员信息读权限/个人手机号信息）: $e");
-      }
-
-      return {"userid": userid, "name": name, "mobile": mobile};
-    } catch (e) {
-      debugPrint("getbyunionid 失败（可能缺少成员信息读权限）: $e");
-    }
-    return null;
-  }
-
-  /// 旧版免登接口：企业 access_token + 授权码 获取用户信息（无需 Contact.User.Read 权限）
-  Future<Map<String, String>?> _fetchUserByOldApi(String code) async {
-    try {
-      final corpToken = await _getCorpAccessToken();
-      if (corpToken.isEmpty) {
+        debugPrint("旧版免登: 获取企业 access_token 失败: ${tokenResp.data}");
         return null;
       }
 
@@ -354,33 +275,9 @@ class AuthController extends GetxController {
       debugPrint("旧版免登 getuserinfo 返回: ${userResp.data}");
       final result = userResp.data?["result"];
       if (result is Map) {
-        final userid = result["userid"]?.toString() ?? "";
-        final name = result["name"]?.toString() ?? "";
-        String mobile = "";
-
-        // 补充手机号（需要通讯录读取权限；失败不影响登录）
-        if (userid.isNotEmpty) {
-          try {
-            final detailResp = await Dio().post(
-              "https://oapi.dingtalk.com/topapi/v2/user/get",
-              queryParameters: {"access_token": corpToken},
-              data: {"userid": userid},
-            );
-            final detail = detailResp.data?["result"];
-            if (detail is Map) {
-              mobile = (detail["mobile"] ?? detail["phone"])
-                      ?.toString() ??
-                  "";
-            }
-          } catch (e) {
-            debugPrint("旧版免登: 获取手机号失败: $e");
-          }
-        }
-
         return {
-          "userid": userid,
-          "name": name,
-          "mobile": mobile,
+          "userid": result["userid"]?.toString() ?? "",
+          "name": result["name"]?.toString() ?? "",
         };
       }
     } catch (e) {
